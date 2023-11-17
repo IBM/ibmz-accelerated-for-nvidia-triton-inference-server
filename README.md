@@ -169,7 +169,7 @@ docker run --shm-size 1G --rm
     -p <EXPOSE_HTTP_PORT_NUM>:8000
     -p <EXPOSE_GRPC_PORT_NUM>:8001
     -p <EXPOSE_Metrics_PORT_NUM>:8002
-    -v $PWD/models:/models tritonserver:1.0 tritonserver
+    -v $PWD/models:/models <triton_inference_server_image> tritonserver
     --model-repository=/models
 ```
 
