@@ -15,7 +15,7 @@
 - [Using the Code Samples](#code-samples)
 - [Additional Topics](#additional-topics)
 - [Limitations and Known Issues](#limitations-known-issues)
-- [Versions and Release Cadence](#versions)
+- [Versions and Release Cadence](#versioning)
 - [Frequently Asked Questions](#faq)
 - [Technical Support](#contact)
 - [Licenses](#licenses)
@@ -117,7 +117,7 @@ To view a brief overview of the operating system version, software versions and
 content installed in the container, as well as any release notes for each
 released container image version, please visit the `releases` section of this
 GitHub Repository, or you can click
-[here](https://github.com/IBM/ibmz-accelerated-for-snapml/releases).
+[here](https://github.com/IBM/ibmz-accelerated-for-nvidia-triton-inference-server/releases/).
 
 # IBM Z Accelerated for NVIDIA Triton™ Inference Server container image usage <a id="launch-container"></a> <!--markdownlint-disable-line MD013 -->
 
@@ -936,7 +936,7 @@ specific versions of the model. – model_2
    reporting in the API /repository/index. For more details, see
    [link](https://github.com/triton-inference-server/server/issues/6154)
 
-# Versions and Release cadence <a id="versions"></a>
+# Versions and Release cadence <a id="versioning"></a>
 
 IBM Z Accelerated for NVIDIA Triton™ Inference Server will follow the semantic
 versioning guidelines with a few deviations. Overall IBM Z Accelerated for
