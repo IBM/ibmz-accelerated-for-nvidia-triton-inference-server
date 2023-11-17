@@ -5,7 +5,7 @@
 # Table of contents
 
 - [Overview](#overview)
-- [Downloading the IBM Z Accelerated for NVIDIA Triton™ Inference Sever Container Image](#container)
+- [Downloading the IBM Z Accelerated for NVIDIA Triton™ Inference server Container Image](#container)
 - [Container Image Contents](#contents)
 - [IBM Z Accelerated for NVIDIA Triton™ Inference Server container image usage](#launch-container)
 - [Security and Deployment Guidelines](#security-and-deployment-guidelines)
@@ -22,7 +22,7 @@
 
 # Overview <a id="overview"></a>
 
-[Triton Inference Sever](https://github.com/triton-inference-server/server) is
+[Triton Inference Server](https://github.com/triton-inference-server/server) is
 an open source fast, scalable, and open-source AI inference server, by
 standardizing model deployment and execution streamlined and optimized for high
 performance. The Triton Inference Server can deploy AI models such as deep
@@ -55,7 +55,7 @@ repository of the models that Triton Inference Server will make available for a
 deployment.
 
 On IBM® z16™ and later (running Linux on IBM Z or IBM® z/OS® Container
-Extensions (IBM zCX)), With Triton Inference Sever 2.33.0 python backend for IBM
+Extensions (IBM zCX)), With Triton Inference server 2.33.0 python backend for IBM
 Snap ML or custom backend like ONNX-MLIR will leverage new inference
 acceleration capabilities that transparently target the IBM Integrated
 Accelerator for AI through the
@@ -919,12 +919,12 @@ specific versions of the model. – model_2
    currently not available. For more details, see
    [link](https://github.com/triton-inference-server/server/issues/5837)
 
-4. Consumer of Triton sever will only be able to create up to 40 log files in
+4. Consumer of Triton server will only be able to create up to 40 log files in
    total out of which 20 for protocol http and 20 for protocol grpc. For more
    details, see
    [link](https://github.com/triton-inference-server/server/issues/6152)
 
-5. Consumer of Triton sever may or may not face an issue while changing the
+5. Consumer of Triton server may or may not face an issue while changing the
    trace settings like the trace_rate, log_rate and log_frequency has value that
    exceeds more than 10 digits. For more details, see
    [link](https://github.com/triton-inference-server/server/issues/6153)
