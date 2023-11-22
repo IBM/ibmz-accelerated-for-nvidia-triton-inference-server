@@ -459,77 +459,34 @@ website link
 
 ## Logging <a id="tis-logging-restapi"></a>
 
-The logging extension enables the client to configure log settings while Triton
-Inference Server running.
+Managing and troubleshooting machine learning models on Triton Inference Server can be effectively accomplished by configuring the logging settings and monitoring the logs.
 
-Managing and troubleshooting machine learning models on Triton Inference Server
-can be effectively accomplished by configuring the logging settings and
-monitoring the logs.
+Explore more command line options:
+```
+docker run <triton_inference_server_image>  tritonserver [options]
+```
+GET `v2/logging`
 
-1. **Configure Logging Settings**:
-
-   - The first step is to configure your logging settings. Triton Inference
-     Server allows you to configure logging options in the server configuration
-     file (typically `tritonserver.conf`). You can specify the log levels, log
-     file paths, and other relevant logging parameters in this file.
-
-   Sample `tritonserver.conf` logging configuration:
-
-   ```json
+POST `v2/logging`
+  ```json
    {
-     ...
      "logging": {
        "log-verbose": false,
        "log-info": true,
        "log-warning": true,
        "log-error": true,
-       “log-file”:logfile1.log
+       "log-file:triton.log"
      },
-     ...
    }
    ```
+View the logs:
 
-   - Here, the log levels can be adjusted (`log-verbose`, `log-info`,
-     `log-warning`, and `log-error`) and specify the log directory and rotation
-     settings (`log-max-size-mb` and `log-max-num-files`) as per the
-     requirements.
-
-2. **Start Triton Inference Server**
-
-   - Once configured the logging settings, start/re-start Triton Inference
-     Server to have the settings effective. It will use the settings specified
-     in the `tritonserver.conf` file.
-
-3. **View Logs**:
-
-   - One can view Triton Inference Server logs in real-time by using tools like
-     `tail` on Linux or the Event Viewer on Windows, depending on the platform
-     where Triton Inference Server's running.
-
-   Example (Linux):
-
-   ```bash
+```bash
    tail -f /path/to/log/directory/triton.log
-   ```
+```
+Logs will be written/overwritten into the file mentioned during the server runtime.
 
-4. **Log Rotation and Maintenance**:
-
-   - Triton Inference Server will automatically rotate logs based on the
-     settings configured in the `tritonserver.conf` file. Old log files will be
-     archived or deleted according to the specified parameters.
-
-5. **Custom Logging**:
-   - If need to perform custom logging of inference models running on Triton
-     Inference Server, one can use standard logging libraries available in
-     programming language (e.g., Python's `logging` module) to log information
-     to the server logs or custom log files.
-
-GET `v2/logging`
-
-POST `v2/logging`
-
-NOTE: Triton Inference Server allows creation of 40 log files in total. 20 for
-each protocol (http and grpc)
+NOTE: Triton Inference Server allows creation of 40 log files in total. 20 for each protocol (http and grpc)
 
 For more details about the logging API calls please visit the Triton
 documentation website link
@@ -716,7 +673,7 @@ different versions available in the model repository.
     |   `-- model.so
     `-- config.pbtxt
 
-I0718 12:07:48.131561 1 server.cc:653]
+I0718 12:07:48.131561 1 server.cc:653
 +-----------+---------+--------+
 | Model     | Version | Status |
 +-----------+---------+--------+
@@ -747,20 +704,15 @@ I0718 12:07:48.131561 1 server.cc:653]
 ```
 
 Each model can have one or more versions. The ModelVersionPolicy property of the
-model configuration is used to set one of the following policies. • All: All
-versions of the model that are available in the model repository are available
-for inferencing. version_policy: { all: {}} • Latest: Only the latest ‘n’
-versions of the model in the repository are available for inferencing. The
-latest versions of the model are the numerically greatest version numbers.
-version_policy: { latest: { num_versions: 2}} • Specific: Only the specifically
-listed versions of the model are available for inferencing. version_policy: {
-specific: { versions: [1,3]}} If no version policy is specified, then Latest
-(with n=1) is used as the default, indicating that only the most recent version
-of the model is made available by Triton. In all cases, the addition or removal
-of version subdirectories from the model repository can change which model
-version is used on subsequent inference requests.
+model configuration is used to set one of the following policies. 
 
-### Version Policy check: { all { }} #to load all the versions of the model
+• All: Load all the versions of the model.All versions of the model that are available in the model repository are available for inferencing. `version_policy: { all: {}} `
+
+• Latest: Only the latest ‘n’versions of the model in the repository are available for inferencing. The latest versions of the model are the numerically greatest version numbers.`version_policy: { latest: { num_versions: 2}}`
+
+• Specific: Only the specifically listed versions of the model are available for inferencing. `version_policy: {specific: { versions: [1,3]}}` If no version policy is specified, then Latest (with n=1) is used as the default, indicating that only the most recent version of the model is made available by Triton. In all cases, the addition or removal of version subdirectories from the model repository can change which model version is used on subsequent inference requests.
+
+### Version Policy check: All
 
 #### Test backends with multiple versions along with -1
 
@@ -789,7 +741,7 @@ error: creating server: Internal - failed to load all models
 
 ### Version Policy check: Latest
 
-version_policy: { latest: { num_versions: 2}} #to load latest 2 versions of the
+`version_policy: { latest: { num_versions: 2}}` to load latest 2 versions of the
 model. The default is the higher version of a model.
 
 ```text
@@ -822,9 +774,9 @@ model. The default is the higher version of a model.
 
 ### Version Policy check: Specific
 
-version_policy: { specific: { versions: [4]}} #to load specific versions of the
-model. – model_1 version_policy: { specific: { versions: [3,9]}} #to load
-specific versions of the model. – model_2
+`version_policy: { specific: { versions: [4]}}` to load specific versions of the model. – model_1 
+
+`version_policy: { specific: { versions: [3,9]}}` to load specific versions of the model. – model_2
 
 ```text
 +-----------+---------+--------+
@@ -1010,10 +962,10 @@ target the CPU with no changes to the model._
 
 | Error Type           | Description                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Model load errors    | These errors occur when the server fails to load the machine learning model. Possible reasons could be incorrect model configuration, incompatible model format, or missing model files Backend errors Triton supports multiple backends for running models, such as TensorFlow, ONNX, and PyTorch. Errors can occur if there are issues with the backend itself, such as version compatibility problems or unsupported features. |
+| Model load errors    | These errors occur when the server fails to load the machine learning model. Possible reasons could be incorrect model configuration, incompatible model format, or missing model files Backend errors Triton supports multiple backends for running models, such as Python, ONNX-MLIR. Errors can occur if there are issues with the backend itself, such as version compatibility problems or unsupported features. |
 | Input data errors    | When sending requests to the Triton server, issues might arise with the input data provided by the client. This could include incorrect data types, shape mismatches, or missing required inputs.                                                                                                                                                                                                                                 |
 | Inference errors     | Errors during the inference process can happen due to problems with the model's architecture or issues within the model's code.                                                                                                                                                                                                                                                                                                   |
-| Resource errors      | Triton uses system resources like GPU, CPU, and memory to perform inference. Errors can occur if there are resource allocation problems or resource constraints are not handled properly.                                                                                                                                                                                                                                         |
+| Resource errors      | Triton uses system resources like CPU and memory to perform inference. Errors can occur if there are resource allocation problems or resource constraints are not handled properly.                                                                                                                                                                                                                                         |
 | Networking errors    | Triton is a server that communicates with clients over the network. Network-related issues such as timeouts, connection problems, or firewall restrictions can lead to errors.                                                                                                                                                                                                                                                    |
 | Configuration errors | Misconfigurations in the Triton server settings or environment variables could result in unexpected behavior or failures.                                                                                                                                                                                                                                                                                                         |
 | Scaling errors       | When deploying Triton in a distributed or multi-instance setup, errors can occur due to load balancing issues, communication problems between instances, or synchronization failures.                                                                                                                                                                                                                                             |
