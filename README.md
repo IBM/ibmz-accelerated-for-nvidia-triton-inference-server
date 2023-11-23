@@ -449,7 +449,7 @@ For more details about the classification API calls please visit the Triton
 documentation website link
 [here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_classification.md)
 
-- Binary data \* `POST /v2/models/<model_name>/infer` HTTP/1.1 The binary tensor
+- Binary data \* `POST /v2/models/<model_name>/infer`. The binary tensor
   data extension allows Triton Inference Server to support tensor data
   represented in a binary format in the body of an HTTP/REST request.
 
