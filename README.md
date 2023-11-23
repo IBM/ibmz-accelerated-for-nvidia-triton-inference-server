@@ -569,8 +569,7 @@ Network with MNIST
    [here](https://github.com/onnx/models/tree/main/vision/classification/mnist/model)
 3. Use IBM zDLC to transform onnx-mlir model to model.so file
 4. Import the compiled model into mode repository.
-5. Create model folder structure including relevant files that are needed to be
-   deployed
+5. Create model folder structure including relevant files that are needed to be deployed
 6. Deploy the model
 
 For more details about the sample model is documented
