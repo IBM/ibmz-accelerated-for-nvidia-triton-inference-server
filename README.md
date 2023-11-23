@@ -321,12 +321,10 @@ capabilities.
 
 NOTE:
 
-1. model.py should be there in the model repository to use the python backend
-   framework.
+1. model.py should be there in the model repository to use the python backend framework.
 2. Mention the backend key value as python in the file config.pbtxt a. backend:
    "python"
-3. Multiple versions are supported, only positive values as version model are
-   supported
+3. Multiple versions are supported, only positive values as version model are supported
 
 ## ONNX-MLIR Backend <a id="onnx-mlir-backend"></a>
 
@@ -385,8 +383,7 @@ please visit the Triton documentation website link
 
 ### Model Configuration <a id="tis-model-config-restapi"></a>
 
-The model configuration extension allows Triton Inference Server to return
-server-specific information.
+The model configuration extension allows Triton Inference Server to return server-specific information.
 
 GET `v2/models/${MODEL_NAME}[/versions/${MODEL_VERSION}]/config`
 
