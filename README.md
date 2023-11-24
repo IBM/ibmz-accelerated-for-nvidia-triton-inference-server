@@ -629,8 +629,7 @@ documented
 
 ## Version policy
 
-Below details provides how the version policy been applied while model with
-different versions available in the model repository.
+Below details provides how the version policy been applied while model with different versions available in the model repository.
 
 ### Python and onnx-mlir backend with the -1 version
 
