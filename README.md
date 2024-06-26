@@ -22,7 +22,7 @@
 
 # Overview <a id="overview"></a>
 
-[Triton Inference Server](https://github.com/triton-inference-server/server) is
+[Triton Inference Server](https://docs.nvidia.com/deeplearning/triton-inference-server/archives/triton-inference-server-2410/user-guide/docs/user_guide/architecture.html) is
 an open source fast, scalable, and open-source AI inference server, by
 standardizing model deployment and execution streamlined and optimized for high
 performance. The Triton Inference Server can deploy AI models such as deep
@@ -123,7 +123,7 @@ GitHub Repository, or you can click
 
 For documentation how serving models with Triton Inference Server please visit
 the official
-[Open Source Triton Inference Server documentation](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/index.html).
+[Open Source Triton Inference Server documentation](https://docs.nvidia.com/deeplearning/triton-inference-server/archives/triton-inference-server-2410/user-guide/docs/index.html).
 
 For brief examples on deploying models with Triton Inference Server, please
 visit our [samples section](#code-samples)
@@ -132,9 +132,8 @@ visit our [samples section](#code-samples)
 
 Launching and maintaining IBM Z Accelerated Triton™ Inference Server revolves
 around official
-[user guide](https://docs.nvidia.com/deeplearning/triton-inference-server/archives/triton_inference_server_1140/user-guide/docs/run.html)
-and
-[quick start](https://github.com/triton-inference-server/server/blob/r23.04/docs/getting_started/quickstart.md)
+
+[quick start](https://github.com/triton-inference-server/server/blob/r23.12/docs/getting_started/quickstart.md)
 tutorial.
 
 This documentation will cover :
@@ -146,7 +145,7 @@ This documentation will cover :
 ## Creating a Model Repository <a id="create-model-repository"></a>
 
 User can follow the steps describe at
-[model repository](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_repository.md)
+[model repository](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_repository.md)
 to create a model repository. The following steps would launch the Triton
 Inference Server.
 
@@ -194,7 +193,7 @@ Inference Server is ready and non-200 if it is not ready.
 # Security and Deployment Guidelines <a id="security-and-deployment-guidelines"></a>
 
 Once the model been available either on a system or in a
-[model repository](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_repository.md),
+[model repository](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_repository.md),
 model can be deployed automatically by specifying the path to the model location
 while launching the Triton Inference Server.
 
@@ -266,7 +265,7 @@ Python backend Triton Inference Server has a Python backend that allows you to
 deploy machine learning models written in Python for inference. This backend is
 known as the "Python backend" or "Python script backend."
 
-For more details about triton python backend are documented [here](https://github.com/triton-inference-server/python_backend?tab=readme-ov-file#user-documentation)
+For more details about triton python backend are documented [here](https://github.com/triton-inference-server/python_backend/tree/r23.12?tab=readme-ov-file#user-documentation)
 
 Format of the python backend model directory looks like below
 
@@ -300,16 +299,16 @@ backend: "python"
 Triton Inference Server exposes some flags to control the execution mode of models through parameters section in the model’s config.pbtxt file.
 
 - **Backend** :
-   Backend parameter must be provided as “python” while utilising ONNX-MLIR Backend. For more details related to backend [here](https://github.com/triton-inference-server/backend/blob/main/README.md#backends)
+   Backend parameter must be provided as “python” while utilising ONNX-MLIR Backend. For more details related to backend [here](https://github.com/triton-inference-server/backend/blob/r23.12/README.md#backends)
    
    ```
    backend: "python"
    ```
    
 - **Inputs and Outputs:** : 
-    Each model input and output must specify a name, datatype, and shape. The name specified for an input or output tensor must match the name expected by the model. For more details on inputs and output tensors check documentation of Triton Inference server [here](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#inputs-and-outputs)
+    Each model input and output must specify a name, datatype, and shape. The name specified for an input or output tensor must match the name expected by the model. For more details on inputs and output tensors check documentation of Triton Inference server [here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md#inputs-and-outputs)
     
-For more options see [Model Configuration](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#model-configuration).
+For more options see [Model Configuration](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md#model-configuration).
     
 Using the Python backend in Triton is especially useful for deploying custom
 models or models developed with specific libraries that are not natively
@@ -362,16 +361,16 @@ backend: "onnxmlir"
 #### Configuration Parameters:
 
 - **Backend** :
-   Backend parameter must be provided as “onnxmlir” while utilising ONNX-MLIR Backend. For more details related to backend [here](https://github.com/triton-inference-server/backend/blob/main/README.md#backends)
+   Backend parameter must be provided as “onnxmlir” while utilising ONNX-MLIR Backend. For more details related to backend [here](https://github.com/triton-inference-server/backend/blob/r23.12/README.md)
    
    ```
    backend: "onnxmlir"
    ```
    
 - **Inputs and Outputs:** : 
-    Each model input and output must specify a name, datatype, and shape. The name specified for an input or output tensor must match the name expected by the model. For more details on inputs and output tensors check documentation of Triton Inference server [here](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#inputs-and-outputs)
+    Each model input and output must specify a name, datatype, and shape. The name specified for an input or output tensor must match the name expected by the model. For more details on inputs and output tensors check documentation of Triton Inference server [here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md#inputs-and-outputs)
     
-For more options see [Model Configuration](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#model-configuration).
+For more options see [Model Configuration](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md).
 
 NOTE: Multiple versions are supported, only positive values as version model are supported
 
@@ -384,7 +383,7 @@ This backend supports importing tree ensembles models that were trained with oth
 ### Backend Usage Information
 In Order to deploy any model on Triton Inference Server, one should have a model repository and Model configuration ready. 
 
-Model Configuration: The model configuration  ```(config.pbtxt)``` in Triton Inference Server defines metadata, optimization settings, and customised  parameters for each model. This configuration ensures models are served with optimal performance and tailored behaviour.For more details [Model Configuration](https://github.com/triton-inference-server/server/blob/190a59184ea82a18b6c790bfacc8933fe04f01fa/docs/user_guide/model_configuration.md).
+Model Configuration: The model configuration  ```(config.pbtxt)``` in Triton Inference Server defines metadata, optimization settings, and customised  parameters for each model. This configuration ensures models are served with optimal performance and tailored behaviour.For more details [Model Configuration](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md).
 
 ### Models Repository
 Like all Triton backends, models deployed via the Snap ML C++ Backend make use of a specially laid-out "model repository" directory containing at least one serialized model and a "config.pbtxt" configuration file.
@@ -517,12 +516,12 @@ backend: "ibmsnapml"
     ```
 - **Inputs and Outputs:** : 
     Each model input and output must specify a name, datatype, and shape( for more details on 
-    inputs and output tensors check documentation of Triton Inference server [here](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#model-configuration)).The name specified for an input or output tensor must match the name 
+    inputs and output tensors check documentation of Triton Inference server [here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md#model-configuration)).The name specified for an input or output tensor must match the name 
     expected by the model. An input shape indicates the shape of an input tensor expected by the model and by Triton inference request. An output 
     shape indicates the shape of an output tensor produced by the model and returned by Triton in response to an inference request. Both input and output 
     shape must have rank greater-or-equal-to 1, that is, the empty shape [ ] is not allowed.In case of preprocessing, the data type of Input 
     must be ```TYPE_STRING```and output tensor can be of  either ```TYPE_FP64``` or ```TYPE_FP32```. For more details on 
-    supported tensor data types by Triton Inference server ,vist [here](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#datatypes).
+    supported tensor data types by Triton Inference server ,vist [here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md#datatypes).
 
 
 # REST APIs <a id="triton-server-restapi"></a>
@@ -547,7 +546,7 @@ handles changes to the model repository and which protocols and APIs are
 available.
 
 More details about model management can be found
-[here](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_management.html#model-management)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_management.md)
 
 ### Model Repository <a id="tis-model-repository-restapi"></a>
 
@@ -563,7 +562,7 @@ more model repositories being served by Triton Inference Server.
 
 For more details about the model repository index, load and unload API calls
 please visit the Triton documentation website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_model_repository.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_model_repository.md)
 
 ### Model Configuration <a id="tis-model-config-restapi"></a>
 
@@ -573,7 +572,7 @@ GET `v2/models/${MODEL_NAME}[/versions/${MODEL_VERSION}]/config`
 
 For more details about the model configuration API calls please visit the Triton
 documentation website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_model_configuration.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_model_configuration.md)
 
 ### Model Metadata <a id="tis-model-metadata-restapi"></a>
 
@@ -628,7 +627,7 @@ reports “classification” in the extensions field of its Server Metadata.
 
 For more details about the classification API calls please visit the Triton
 documentation website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_classification.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_classification.md)
 
 - Binary data \* `POST /v2/models/<model_name>/infer`. The binary tensor
   data extension allows Triton Inference Server to support tensor data
@@ -636,7 +635,7 @@ documentation website link
 
 For more details about the binary data please visit the Triton documentation
 website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_binary_data.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_binary_data.md)
 
 ## Logging <a id="tis-logging-restapi"></a>
 
@@ -671,7 +670,7 @@ NOTE: Triton Inference Server allows creation of 40 log files in total. 20 for e
 
 For more details about the logging API calls please visit the Triton
 documentation website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_logging.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_logging.md)
 
 ## Metrics Collection <a id="tis-metrics-restapi"></a>
 
@@ -682,7 +681,7 @@ GET `/metrics`
 
 For more details about the metrics collections please visit the Triton
 documentation website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/user_guide/metrics.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/metrics.md)
 
 ## Traces <a id="tis-traces-restapi"></a>
 
@@ -695,7 +694,7 @@ POST `v2[/models/${MODEL_NAME}]/trace/setting`
 
 For more details about the trace API calls please visit the Triton documentation
 website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_trace.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_trace.md)
 
 ## Statistics <a id="tis-statistics-restapi"></a>
 
@@ -703,7 +702,7 @@ GET `v2/models[/${MODEL_NAME}[/versions/${MODEL_VERSION}]]/stats`
 
 For more details about the statistics API calls please visit the Triton
 documentation website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_statistics.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_statistics.md)
 
 ## Server Metadata <a id="tis-server-metadata-restapi"></a>
 
@@ -800,7 +799,7 @@ for previous executed inference requests and sent as response if new inference
 request hits cache.
 
 For more details about the Triton response cache is documented
-[here](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/response_cache.html#triton-response-cache)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/response_cache.md)
 
 ## Repository agent (checksum_repository_agent)
 
@@ -809,7 +808,7 @@ decryption, conversion, or similar operations when a model is loaded.
 
 For more details about the Repository agent(checksum_repository_agent) is
 documented
-[here](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/customization_guide/repository_agents.html#repository-agent)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/customization_guide/repository_agents.md)
 
 ## Version policy
 
