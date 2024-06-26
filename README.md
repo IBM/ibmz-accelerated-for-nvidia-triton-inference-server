@@ -257,6 +257,7 @@ of today.
 
 - [Python Backend](#python-backend)
 - [ONNX-MLIR Backend](#onnx-mlir-backend)
+- [Snap ML C++ Backend](#snapml-cpp-backend)
 
 ## Python Backend <a id="python-backend"></a>
 
@@ -372,6 +373,155 @@ backend: "onnxmlir"
 For more options see [Model Configuration](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md).
 
 NOTE: Multiple versions are supported, only positive values as version model are supported
+
+
+## Snap ML C++ Backend <a id="snapml-cpp-backend"></a>
+
+Snap Machine Learning (Snap ML in short) is a library for training and scoring traditional machine learning models with end to end inferencing capabilities. As part of the preprocessing pipeline it supports Normalizer, Kbinsdiscritizer, and one-hot encoding  transformers. 
+This backend supports importing tree ensembles models that were trained with other frameworks (e.g., scikit-learn, XGBoost, LightGBM) so one can leverage Integrated On-Chip Accelerator on IBM Z and IBM LinuxONE transparently via Snap ML’s accelerated inference engine. For more information on supported models refer Snap ML documentation [here](https://snapml.readthedocs.io/en/latest/model_import.html).
+
+### Backend Usage Information
+In Order to deploy any model on Triton Inference Server, one should have a model repository and Model configuration ready. 
+
+Model Configuration: The model configuration  ```(config.pbtxt)``` in Triton Inference Server defines metadata, optimization settings, and customised  parameters for each model. This configuration ensures models are served with optimal performance and tailored behaviour.For more details [Model Configuration](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md).
+
+### Models Repository
+Like all Triton backends, models deployed via the Snap ML C++ Backend make use of a specially laid-out "model repository" directory containing at least one serialized model and a "config.pbtxt" configuration file.
+
+Typically, a models directory should look like below: 
+
+```
+models
+└── test_snapml_model
+    │   ├── 1
+    │       ├── model.pmml
+    │       └── pipeline.json
+    └── config.pbtxt
+
+```
+
+Given above is sample for ```pmml``` format. User should change the model formats as per the model framework chosen.
+
+pipeline.json: This is optional and required to be provided only when pre-processing is chosen. 
+
+### Model Configuration
+Every Snap ML C++ Backend model must provide config.pbtxt file describing the model configuration.
+Below is a sample ```config.pbtxt``` for Snap ML C++ Backend:
+
+```
+max_batch_size: 32
+input {
+  name: "IN0"
+  data_type: TYPE_FP32
+  dims: 5
+}
+output {
+  name: "OUT0"
+  data_type: TYPE_FP64
+  dims: 1
+}
+instance_group  {
+   count: 2
+   kind: KIND_CPU
+}
+dynamic_batching {
+  preferred_batch_size: 32
+  max_queue_delay_microseconds: 25000
+}
+parameters {
+  key: "MODEL_FILE_FORMAT"
+  value {
+    string_value: "pmml"
+  }
+}
+backend: "ibmsnapml"
+
+```
+### Configuration Parameters:
+
+- **Backend** :
+   Backend parameter must be provided as “ibmsnapml” while utilising Snap ML C++ Backend.
+   ```
+   backend: "ibmsnapml"
+   ```
+- **PREPROCESSING_FILE** :
+   This configuration file parameter specifies the name of the file to be used for preprocessing. The preprocessing file must be named as ‘pipeline.json’
+   when preprocessing is selected for end-to-end inferencing.
+
+   If this parameter is not provided, the backend assumes that preprocessing is not required,even if pipeline.json is present in the model repository.
+
+   ```
+   parameters {
+   key: "PREPROCESSING_FILE"
+   value {
+   string_value: "pipeline.json"
+   }
+   }
+   ```
+   ***Note*** : The ```‘pipeline.json’``` is serialised preprocessing pipeline captured during training using Snap ML API ```(export_preprocessing_pipeline(pipeline_xgb['preprocessor'],'pipeline.json’)```.For more details visit [here](https://snapml.readthedocs.io/en/latest/pipeline_export.html).
+   
+- **SNAPML_TARGET_CLASS** :
+   This configuration parameter specifies which model needs to be imported by Snap ML C++ Backend as per Snap ML documentation [here](https://snapml.readthedocs.io/en/latest/model_import.html).
+
+   ```
+   parameters {
+   key: "SNAPML_TARGET_CLASS"
+   value {
+   string_value: "BoostingMachineClassifier"
+   }
+   }
+
+   ```
+   For example, pre-trained model is ```‘sklearn.ensemble.RandomForestClassifier’ ``` then target  SnapML  class should ```‘snapml.RandomForestClassifier’``` . In case of C++ backend same target class will be referred as ```‘RandomForestClassifier’```  as a value for ```SNAPML_TARGET_CLASS``` in the config.pbtxt.
+   
+- **MODEL_FILE_FORMAT** :   
+   Model File Format provided in the configuration file should be as per the Snap ML supported  models. Refer to Snap ML documentation [here](https://snapml.readthedocs.io/en/latest/model_import.html)
+
+   ```
+   parameters {
+     key: "MODEL_FILE_FORMAT"
+     value {
+       string_value: "pmml"
+     }
+   
+   ```   
+- **NUM_OF_PREDICT_THREADS** :  
+    This defines the CPU threads running for each inference call.
+  ```
+    parameters {
+    key: "NUM_OF_PREDICT_THREADS"
+    value {
+      string_value: "12"
+    }
+  }
+  
+  ``` 
+- **PREDICT_PROBABILITY** : 
+    This Configuration parameter  controls whether the model’s prediction is to be in terms of   probability. 
+
+    If set to ```true```, the model will return probability value  as response. The probability value will always be for the ***positive class*** label. 
+    If set to ```false``` (or the parameter is omitted), the model will return the most likely predicted class label ***without*** probabilities. This is     the default behaviour. 
+    Note that  ```PREDICT_PROBABILITY``` is case sensitive and accepts only ```‘true’``` or ```‘false’``` . Any other values apart from these like 
+    (True/False/1/0) are provided , by default ```‘false’``` will be considered.
+
+    ***Note*** : Probability will be always for the positive class label.
+
+    ```
+    parameters {
+     key: "PREDICT_PROBABILITY"
+     value {
+      string_value: "true"
+     }
+    }
+    ```
+- **Inputs and Outputs:** : 
+    Each model input and output must specify a name, datatype, and shape( for more details on 
+    inputs and output tensors check documentation of Triton Inference server [here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md#model-configuration)).The name specified for an input or output tensor must match the name 
+    expected by the model. An input shape indicates the shape of an input tensor expected by the model and by Triton inference request. An output 
+    shape indicates the shape of an output tensor produced by the model and returned by Triton in response to an inference request. Both input and output 
+    shape must have rank greater-or-equal-to 1, that is, the empty shape [ ] is not allowed.In case of preprocessing, the data type of Input 
+    must be ```TYPE_STRING```and output tensor can be of  either ```TYPE_FP64``` or ```TYPE_FP32```. For more details on 
+    supported tensor data types by Triton Inference server ,vist [here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md#datatypes).
 
 # REST APIs <a id="triton-server-restapi"></a>
 
@@ -982,7 +1132,7 @@ target the CPU with no changes to the model._
 | Error Type           | Description                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Model load errors    | These errors occur when the server fails to load the machine learning model. Possible reasons could be incorrect model configuration, incompatible model format, or missing model files Backend errors Triton supports multiple backends for running models, such as Python, ONNX-MLIR. Errors can occur if there are issues with the backend itself, such as version compatibility problems or unsupported features. |
-| Input data errors    | When sending requests to the Triton server, issues might arise with the input data provided by the client. This could include incorrect data types, shape mismatches, or missing required inputs.                                                                                              |
+| Input data errors    | When sending requests to the Triton server, issues might arise with the input data provided by the client. This could include incorrect data types, shape mismatches, or missing required inputs.Any valid request batched with invalid request might lead to either inaccurate or invalid response by inference server to the entire batch.                                                                                                |
 | Inference errors     | Errors during the inference process can happen due to problems with the model's architecture or issues within the model's code.                                                                                                                                                                                                                                                                                                   |
 | Resource errors      | Triton uses system resources like CPU and memory to perform inference. Errors can occur if there are resource allocation problems or resource constraints are not handled properly.                                                                                                                                                                                                                                         |
 | Networking errors    | Triton is a server that communicates with clients over the network. Network-related issues such as timeouts, connection problems, or firewall restrictions can lead to errors.                                                                                                                                                                                                                                                    |
