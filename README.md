@@ -22,7 +22,7 @@
 
 # Overview <a id="overview"></a>
 
-[Triton Inference Server](https://github.com/triton-inference-server/server) is
+[Triton Inference Server](https://docs.nvidia.com/deeplearning/triton-inference-server/archives/triton-inference-server-2410/user-guide/docs/user_guide/architecture.html) is
 an open source fast, scalable, and open-source AI inference server, by
 standardizing model deployment and execution streamlined and optimized for high
 performance. The Triton Inference Server can deploy AI models such as deep
@@ -123,7 +123,7 @@ GitHub Repository, or you can click
 
 For documentation how serving models with Triton Inference Server please visit
 the official
-[Open Source Triton Inference Server documentation](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/index.html).
+[Open Source Triton Inference Server documentation](https://docs.nvidia.com/deeplearning/triton-inference-server/archives/triton-inference-server-2410/user-guide/docs/index.html).
 
 For brief examples on deploying models with Triton Inference Server, please
 visit our [samples section](#code-samples)
@@ -132,9 +132,8 @@ visit our [samples section](#code-samples)
 
 Launching and maintaining IBM Z Accelerated Triton™ Inference Server revolves
 around official
-[user guide](https://docs.nvidia.com/deeplearning/triton-inference-server/archives/triton_inference_server_1140/user-guide/docs/run.html)
-and
-[quick start](https://github.com/triton-inference-server/server/blob/r23.04/docs/getting_started/quickstart.md)
+
+[quick start](https://github.com/triton-inference-server/server/blob/r23.12/docs/getting_started/quickstart.md)
 tutorial.
 
 This documentation will cover :
@@ -146,7 +145,7 @@ This documentation will cover :
 ## Creating a Model Repository <a id="create-model-repository"></a>
 
 User can follow the steps describe at
-[model repository](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_repository.md)
+[model repository](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_repository.md)
 to create a model repository. The following steps would launch the Triton
 Inference Server.
 
@@ -194,7 +193,7 @@ Inference Server is ready and non-200 if it is not ready.
 # Security and Deployment Guidelines <a id="security-and-deployment-guidelines"></a>
 
 Once the model been available either on a system or in a
-[model repository](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_repository.md),
+[model repository](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_repository.md),
 model can be deployed automatically by specifying the path to the model location
 while launching the Triton Inference Server.
 
@@ -206,7 +205,7 @@ docker run --shm-size 1G --rm \
     -p <TRITONSERVER_GRPC_PORT_NUM>:8001 \
     -p <TRITONSERVER_METRICS_PORT_NUM>:8002 \
     -v $PWD/models:/models <triton_inference_server_image>   tritonserver \
-    --model-repository=/models --log-verbose 1
+    --model-repository=/models
 ```
 
 ## Triton Inference Server using HTTPS/Secure gRPC
@@ -265,18 +264,51 @@ Python backend Triton Inference Server has a Python backend that allows you to
 deploy machine learning models written in Python for inference. This backend is
 known as the "Python backend" or "Python script backend."
 
-For more details about triton python backend are documented here
+For more details about triton python backend are documented [here](https://github.com/triton-inference-server/python_backend/tree/r23.12?tab=readme-ov-file#user-documentation)
 
-Format of the python backend looks like below
+Format of the python backend model directory looks like below
 
 ```text
 $ model_1
-   |-- -1
+   |-- 1
    |   |-- model.py
    |   `-- model.txt
    `-- config.pbtxt
 ```
 
+### Minimal Model Configuration
+Every Python Backend model must provide config.pbtxt file describing the model configuration.
+Below is a sample ```config.pbtxt``` for Python Backend:
+
+```
+max_batch_size: 32
+input {
+  name: "IN0"
+  data_type: TYPE_FP32
+  dims: 5
+}
+output {
+  name: "OUT0"
+  data_type: TYPE_FP64
+  dims: 1
+}
+backend: "python"
+```
+#### Configuration Parameters:
+Triton Inference Server exposes some flags to control the execution mode of models through parameters section in the model’s config.pbtxt file.
+
+- **Backend** :
+   Backend parameter must be provided as “python” while utilising ONNX-MLIR Backend. For more details related to backend [here](https://github.com/triton-inference-server/backend/blob/r23.12/README.md#backends)
+   
+   ```
+   backend: "python"
+   ```
+   
+- **Inputs and Outputs:** : 
+    Each model input and output must specify a name, datatype, and shape. The name specified for an input or output tensor must match the name expected by the model. For more details on inputs and output tensors check documentation of Triton Inference server [here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md#inputs-and-outputs)
+    
+For more options see [Model Configuration](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md#model-configuration).
+    
 Using the Python backend in Triton is especially useful for deploying custom
 models or models developed with specific libraries that are not natively
 supported by Triton's other backends. It provides a flexible way to bring in
@@ -284,62 +316,62 @@ your own machine learning code and integrate it with the server's inference
 capabilities. It provides flexibility by allowing you to use any Python machine
 learning library to define your model's inference logic.
 
-Here's a high-level overview of how the Python backend works in the Triton
-Inference Server:
-
-1. Model Definition: You define your own machine learning model using a Python
-   library of your choice. For example, you might use Scikit-learn, Keras, or
-   any other Python machine learning library that can load and execute your
-   model.
-
-2. Triton Python Backend: The Triton Inference Server includes a Python backend
-   that allows you to specify a custom Python script to handle inference for
-   your model.
-
-3. Inference Logic: In the Python script, you implement the inference logic that
-   takes input data, performs the necessary computations using your model, and
-   produces the output in a format that can be returned to the client.
-
-4. Triton Server Configuration: When starting the Triton server, you configure
-   it to use the Python backend and provide the path to your custom Python
-   script.
-
-5. Model Deployment: You package your model and the custom Python script
-   together, so when you deploy the model to the Triton server, it knows how to
-   use your Python script for inference.
-
-6. Inference Requests: Clients can then send inference requests to the Triton
-   server, specifying the model they want to use. The server will pass the input
-   data to your custom Python script, which will handle the inference and return
-   the results.
-
-Using the Python backend in Triton is especially useful for deploying custom
-models or models developed with specific libraries that are not natively
-supported by Triton's other backends. It provides a flexible way to bring in
-your own machine learning code and integrate it with the server's inference
-capabilities.
-
 NOTE:
 
 1. model.py should be there in the model repository to use the python backend framework.
-2. Mention the backend key value as python in the file config.pbtxt a. backend:
-   "python"
-3. Multiple versions are supported, only positive values as version model are supported
+2. Multiple versions are supported, only positive values as version model are supported
 
 ## ONNX-MLIR Backend <a id="onnx-mlir-backend"></a>
 
 A triton backend which allows the deployment of onnx-mlir or zDLC compiled
 models (model.so) with the triton inference server. For more details about the
 onnx-mlir backend are documented
-[here](https://github.com/IBM/onnxmlir-triton-backend) Format of the python
-backend looks like below
+[here](https://github.com/IBM/onnxmlir-triton-backend)
+
+Format of the onnx-mlir backend model directory looks like below
 
 ```text
 $ model_1
-    |-- -1
+    |-- 1
     |   `-- model.so
     `-- config.pbtxt
 ```
+
+### Minimal Model Configuration
+Every ONNX-MLIR Backend model must provide config.pbtxt file describing the model configuration.
+Below is a sample ```config.pbtxt``` for ONNX-MLIR Backend:
+
+```
+max_batch_size: 32
+input {
+  name: "IN0"
+  data_type: TYPE_FP32
+  dims: 5
+  dims: 5
+  dims: 1
+}
+output {
+  name: "OUT0"
+  data_type: TYPE_FP64
+  dims: 1
+}
+backend: "onnxmlir"
+```
+#### Configuration Parameters:
+
+- **Backend** :
+   Backend parameter must be provided as “onnxmlir” while utilising ONNX-MLIR Backend. For more details related to backend [here](https://github.com/triton-inference-server/backend/blob/r23.12/README.md)
+   
+   ```
+   backend: "onnxmlir"
+   ```
+   
+- **Inputs and Outputs:** : 
+    Each model input and output must specify a name, datatype, and shape. The name specified for an input or output tensor must match the name expected by the model. For more details on inputs and output tensors check documentation of Triton Inference server [here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md#inputs-and-outputs)
+    
+For more options see [Model Configuration](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_configuration.md).
+
+NOTE: Multiple versions are supported, only positive values as version model are supported
 
 # REST APIs <a id="triton-server-restapi"></a>
 
@@ -363,7 +395,7 @@ handles changes to the model repository and which protocols and APIs are
 available.
 
 More details about model management can be found
-[here](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_management.html#model-management)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/model_management.md)
 
 ### Model Repository <a id="tis-model-repository-restapi"></a>
 
@@ -379,7 +411,7 @@ more model repositories being served by Triton Inference Server.
 
 For more details about the model repository index, load and unload API calls
 please visit the Triton documentation website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_model_repository.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_model_repository.md)
 
 ### Model Configuration <a id="tis-model-config-restapi"></a>
 
@@ -389,7 +421,7 @@ GET `v2/models/${MODEL_NAME}[/versions/${MODEL_VERSION}]/config`
 
 For more details about the model configuration API calls please visit the Triton
 documentation website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_model_configuration.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_model_configuration.md)
 
 ### Model Metadata <a id="tis-model-metadata-restapi"></a>
 
@@ -444,7 +476,7 @@ reports “classification” in the extensions field of its Server Metadata.
 
 For more details about the classification API calls please visit the Triton
 documentation website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_classification.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_classification.md)
 
 - Binary data \* `POST /v2/models/<model_name>/infer`. The binary tensor
   data extension allows Triton Inference Server to support tensor data
@@ -452,7 +484,7 @@ documentation website link
 
 For more details about the binary data please visit the Triton documentation
 website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_binary_data.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_binary_data.md)
 
 ## Logging <a id="tis-logging-restapi"></a>
 
@@ -487,7 +519,7 @@ NOTE: Triton Inference Server allows creation of 40 log files in total. 20 for e
 
 For more details about the logging API calls please visit the Triton
 documentation website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_logging.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_logging.md)
 
 ## Metrics Collection <a id="tis-metrics-restapi"></a>
 
@@ -498,7 +530,7 @@ GET `/metrics`
 
 For more details about the metrics collections please visit the Triton
 documentation website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/user_guide/metrics.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/metrics.md)
 
 ## Traces <a id="tis-traces-restapi"></a>
 
@@ -511,7 +543,7 @@ POST `v2[/models/${MODEL_NAME}]/trace/setting`
 
 For more details about the trace API calls please visit the Triton documentation
 website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_trace.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_trace.md)
 
 ## Statistics <a id="tis-statistics-restapi"></a>
 
@@ -519,7 +551,7 @@ GET `v2/models[/${MODEL_NAME}[/versions/${MODEL_VERSION}]]/stats`
 
 For more details about the statistics API calls please visit the Triton
 documentation website link
-[here](https://github.com/triton-inference-server/server/blob/r23.04/docs/protocol/extension_statistics.md)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/protocol/extension_statistics.md)
 
 ## Server Metadata <a id="tis-server-metadata-restapi"></a>
 
@@ -566,14 +598,14 @@ Network with MNIST
 1. Jupyter notebook for Convolutional Neural Network with MNIST can be found
    [here](https://github.com/Microsoft/CNTK/blob/master/Tutorials/CNTK_103D_MNIST_ConvolutionalNeuralNetwork.ipynb)
 2. Use step 1 to train model on your own or download pre-trained model from
-   [here](https://github.com/onnx/models/tree/main/vision/classification/mnist/model)
+   [here](https://github.com/onnx/models/tree/main/validated/vision/classification/mnist)
 3. Use IBM zDLC to transform onnx-mlir model to model.so file
 4. Import the compiled model into mode repository.
 5. Create model folder structure including relevant files that are needed to be deployed
 6. Deploy the model
 
 For more details about the sample model is documented
-[here](https://github.com/onnx/models/tree/main/vision/classification/mnist)
+[here](https://github.com/onnx/models/tree/main/validated/vision/classification/mnist)
 
 ## ONNX-MLIR Backend : ONNX Model Zoo
 
@@ -616,7 +648,7 @@ for previous executed inference requests and sent as response if new inference
 request hits cache.
 
 For more details about the Triton response cache is documented
-[here](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/response_cache.html#triton-response-cache)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/user_guide/response_cache.md)
 
 ## Repository agent (checksum_repository_agent)
 
@@ -625,18 +657,17 @@ decryption, conversion, or similar operations when a model is loaded.
 
 For more details about the Repository agent(checksum_repository_agent) is
 documented
-[here](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/customization_guide/repository_agents.html#repository-agent)
+[here](https://github.com/triton-inference-server/server/blob/r23.12/docs/customization_guide/repository_agents.md)
 
 ## Version policy
 
 Below details provides how the version policy been applied while model with different versions available in the model repository.
 
-### Python and onnx-mlir backend with the -1 version
+### Snap ML C++ and ONNX_MLIR backends with the -1 version
 
 ```text
 |-- model_1
 |   |-- -1
-|   |   |-- model.py
 |   |   `-- model.txt
 |   `-- config.pbtxt
 `-- model_2
@@ -647,12 +678,10 @@ Below details provides how the version policy been applied while model with diff
 ---------------------------------------+
 | Model     | Version | Status         |
 +-----------+---------+-----------------
--------------------------------------------------------------------------------------------------------------+
-| model_1|| -1      | UNAVAILABLE: Internal: model.py does not exist in the model
- repository path: /models/ model_1/18446744073709551615/model.py |
-| model_2|| -1      | UNAVAILABLE: Unavailable: unable to find '/models/ model_2
-/18446744073709551615/model.so' for model model_2|
-+-----------+---------+------------------------------------------------------------------------------------------------------------------------------+
+------------------------------------------------------------------------------------------------------------------------------------+
+| model_1|| -1      | UNAVAILABLE: Unavailable: unable to find '/models/model_1/18446744073709551615/model.txt' for model 'model_1' |
+| model_2|| -1      | UNAVAILABLE: Unavailable: unable to find '/models/model_2/18446744073709551615/model.so' for model 'model_2' |
++-----------+---------+-------------------------------------------------------------------------------------------------------------+
 ```
 
 ### Python and onnx-mlir backend with the 0 version
@@ -672,8 +701,8 @@ I0718 12:07:48.131561 1 server.cc:653
 +-----------+---------+--------+
 | Model     | Version | Status |
 +-----------+---------+--------+
-| model_1 | 0       | READY  |
-| model_2| 0       | READY  |
+| model_1   | 0       | READY  |
+| model_2   | 0       | READY  |
 +-----------+---------+--------+
 ```
 
@@ -693,8 +722,8 @@ I0718 12:07:48.131561 1 server.cc:653
 +-----------+---------+--------+
 | Model     | Version | Status |
 +-----------+---------+--------+
-| model_1 | 1       | READY  |
-| model_2  | 1       | READY  |
+| model_1   | 1       | READY  |
+| model_2   | 1       | READY  |
 +-----------+---------+--------+
 ```
 
@@ -714,22 +743,25 @@ model configuration is used to set one of the following policies.
 ```text
 |-- model_1
 |   |-- -1
-|   |   |-- model.py
 |   |   `-- model.txt
 |   |-- 4
-|   |   |-- model.py
 |   |   `-- model.txt
+|   `-- config.pbtxt
 `-- model_2
     |-- -1
     |   `-- model.so
     |-- 3
     |   `-- model.so
-| model_1 | -1      | UNAVAILABLE: Internal: model.py does not exist in the model
- repository path: /models/gbm_model/18446744073709551615/model.py |
-| model_1 | 4       | UNLOADING                                   |
-| model_2  | -1      | UNAVAILABLE: Unavailable: unable to find
-'/models/mnist-12/18446744073709551615/model.so' for model 'mnist-12'        |
-| model_2  | 3       | UNAVAILABLE: unloaded
+    `-- config.pbtxt
+---------------------------------------+
+| Model     | Version | Status         |
++-----------+---------+-----------------
+------------------------------------------------------------------------------------------------------------------------------------+
+| model_1 | -1      | UNAVAILABLE: Unavailable: unable to find '/models/model_1/18446744073709551615/model.txt' for model 'model_1' |
+| model_1 | 4       | UNLOADING                                                                                                     |
+| model_2 | -1      | UNAVAILABLE: Unavailable: unable to find '/models/model_2/18446744073709551615/model.so' for model 'model_2'  |
+| model_2 | 3       | UNAVAILABLE: unloaded                                                                                         |
+------------------------------------------------------------------------------------------------------------------------------------+
 ```
 
 error: creating server: Internal - failed to load all models
@@ -742,28 +774,27 @@ model. The default is the higher version of a model.
 ```text
 |-- model_1
 |   |-- -1
-|   |   |-- model.py
 |   |   `-- model.txt
 |   |-- 13
-|   |   |-- model.py
 |   |   `-- model.txt
 |   |-- 17
-|   |   |-- model.py
 |   |   `-- model.txt
+|   `-- config.pbtxt
 `-- model_2
     |-- -1
     |   `-- model.so
     |-- 15
     |   `-- model.so
-    |-- 3
-    |   `-- model.so
+    |-- 9
+    |    `-- model.so
+    `-- config.pbtxt
 +-----------+---------+--------+
 | Model     | Version | Status |
 +-----------+---------+--------+
-| model_1  | 13      | READY  |
-| model_1  | 17      | READY  |
-| model_2  | 9       | READY  |
-| model_2  | 15      | READY  |
+| model_1   | 13      | READY  |
+| model_1   | 17      | READY  |
+| model_2   | 9       | READY  |
+| model_2   | 15      | READY  |
 +-----------+---------+--------+
 ```
 
@@ -871,17 +902,10 @@ model. The default is the higher version of a model.
    details, see
    [link](https://github.com/triton-inference-server/server/issues/6152)
 
-5. Consumer of Triton server may or may not face an issue while changing the
-   trace settings like the trace_rate, log_rate and log_frequency has value that
-   exceeds more than 10 digits. For more details, see
-   [link](https://github.com/triton-inference-server/server/issues/6153)
-
-6. Trace settings would work even if the model has been unloaded. The reported
-   issue here is that users can still access/change trace settings of a
-   previously existing model that was unloaded to keep around certain
-   model/version metadata even for models that are unloaded for the sake of
-   reporting in the API /repository/index. For more details, see
-   [link](https://github.com/triton-inference-server/server/issues/6154)
+5. Consumer of Triton server may or may not face an issue while having model with
+   version -1 or model.py isn't present for python backend. For more details, see
+   [link](https://github.com/triton-inference-server/server/issues/7052)
+       
 
 # Versions and Release cadence <a id="versioning"></a>
 
@@ -953,12 +977,12 @@ However, if using the IBM Z Accelerated for NVIDIA Triton™ Inference Server on
 either an IBM z15® or an IBM z14®, IBM Snap ML or ONNX-MLIR will transparently
 target the CPU with no changes to the model._
 
-## Q: What are the difference Errors that can arise while using Triton Inference Server? <!--markdownlint-disable-line MD013 -->
+## Q: What are the different errors that can arise while using Triton Inference Server? <!--markdownlint-disable-line MD013 -->
 
 | Error Type           | Description                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Model load errors    | These errors occur when the server fails to load the machine learning model. Possible reasons could be incorrect model configuration, incompatible model format, or missing model files Backend errors Triton supports multiple backends for running models, such as Python, ONNX-MLIR. Errors can occur if there are issues with the backend itself, such as version compatibility problems or unsupported features. |
-| Input data errors    | When sending requests to the Triton server, issues might arise with the input data provided by the client. This could include incorrect data types, shape mismatches, or missing required inputs.                                                                                                                                                                                                                                 |
+| Input data errors    | When sending requests to the Triton server, issues might arise with the input data provided by the client. This could include incorrect data types, shape mismatches, or missing required inputs.                                                                                              |
 | Inference errors     | Errors during the inference process can happen due to problems with the model's architecture or issues within the model's code.                                                                                                                                                                                                                                                                                                   |
 | Resource errors      | Triton uses system resources like CPU and memory to perform inference. Errors can occur if there are resource allocation problems or resource constraints are not handled properly.                                                                                                                                                                                                                                         |
 | Networking errors    | Triton is a server that communicates with clients over the network. Network-related issues such as timeouts, connection problems, or firewall restrictions can lead to errors.                                                                                                                                                                                                                                                    |
@@ -974,7 +998,7 @@ Information regarding technical support can be found
 
 The International License Agreement for Non-Warranted Programs (ILAN) agreement
 can be found
-[here](https://www14.software.ibm.com/cgi-bin/weblap/lap.pl?li_formnum=L-VADS-9E8LT7)
+[here](https://www.ibm.com/support/customer/csol/terms/?id=L-CGGP-9HBPW3&lc=en)
 
 The registered trademark Linux® is used pursuant to a sublicense from the Linux
 Foundation, the exclusive licensee of Linus Torvalds, owner of the mark on a
