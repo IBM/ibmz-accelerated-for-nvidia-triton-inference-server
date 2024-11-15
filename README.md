@@ -522,7 +522,7 @@ backend: "ibmsnapml"
     expected by the model. An input shape indicates the shape of an input tensor expected by the model and by Triton inference request. An output 
     shape indicates the shape of an output tensor produced by the model and returned by Triton in response to an inference request. Both input and output 
     shape must have rank greater-or-equal-to 1, that is, the empty shape [ ] is not allowed.In case of preprocessing, the data type of Input 
-    must be ```TYPE_STRING```and output tensor is ```TYPE_FP32```. For more details on 
+    must be ```TYPE_STRING```and output tensor is ```TYPE_FP64```. For more details on 
     supported tensor data types by Triton Inference server ,vist [here](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_configuration.md#datatypes).
 
 # Triton Model Analyzer<a id="triton-model-analyzer"></a>
