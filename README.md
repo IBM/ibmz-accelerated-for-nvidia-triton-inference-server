@@ -549,56 +549,62 @@ NOTE: If your model requires a custom backend when running on the Triton Inferen
 NOTE: We support only ```KIND_CPU```. Need to pass ```cpu_only: true``` parameter in config.yaml [here](https://github.com/triton-inference-server/model_analyzer/issues/927)
 
 ## Configuring Model Analyzer:
-    Model Analyzer must provide the yaml file whcih contains the information about the model profiling:
+
+Model Analyzer must provide the yaml file which contains the information about the model profiling.
     
-    LOCAL MODE: Local mode is the default mode if no triton-launch-mode is specified.
-    ```
-    model_repository: /models
-    profile_models: 
-      model1:
-        perf_analyzer_flags:
-          input-data: input.json(path to the input file/directory)
-        cpu_only: true
-    run_config_search_mode: quick
-    run_config_search_max_instance_count: 4
-    run_config_search_max_concurrency: 16
-    run_config_search_min_model_batch_size: 8
-    override_output_model_repository: true
+LOCAL MODE: Local mode is the default mode if no triton-launch-mode is specified.
+    
+```
+model_repository: /models
+profile_models: 
+model1:
+perf_analyzer_flags:
+input-data: input.json(path to the input file/directory)
+cpu_only: true
+run_config_search_mode: quick
+run_config_search_max_instance_count: 4
+run_config_search_max_concurrency: 16
+run_config_search_min_model_batch_size: 8
+override_output_model_repository: true
+```   
+    
+    
+REMOTE MODE:This mode is beneficial when you want to use an already running Triton Inference Server.
+You may provide the URLs for the Triton instance's HTTP or GRPC endpoint depending on your chosen client 
+protocol using the --triton-grpc-endpoint, and --triton-http-endpoint flags.Triton Server in this mode needs to be 
+launched with --model-control-mode explicit flag to support loading/unloading of the models.
+    
+```
+run_config_search_disable: True
+concurrency: [2, 4, 8, 16, 32]
+batch_sizes: [8, 16, 32]
+profile_models:
+model1:
+perf_analyzer_flags:
+input-data: input.json(path to the input file/directory)
+cpu_only: true
+model_config_parameters:
+dynamic_batching:
+max_queue_delay_microseconds: [200, 400]
+instance_group:
+- kind: KIND_CPU
+count: [1,2]
+client_protocol: http
+collect_cpu_metrics: True
+triton_launch_mode: remote
+triton_http_endpoint: <TRITON_SERVER_IP>:<EXPOSED_HTTP_PORT_NUM>
+triton_grpc_endpoint: <TRITON_SERVER_IP>:<EXPOSED_GRPC_PORT_NUM>
+triton_metrics_url:   <TRITON_SERVER_IP>:<EXPOSED_METRIC_PORT_NUM>/metrics
+override_output_model_repository: true
+```
+   
 
-    ```
-    REMOTE MODE:This mode is beneficial when you want to use an already running Triton Inference Server.
-    You may provide the URLs for the Triton instance's HTTP or GRPC endpoint depending on your chosen client 
-    protocol using the --triton-grpc-endpoint, and --triton-http-endpoint flags.Triton Server in this mode needs to be 
-    launched with --model-control-mode explicit flag to support loading/unloading of the models.
-    ```
-    run_config_search_disable: True
-    concurrency: [2, 4, 8, 16, 32]
-    batch_sizes: [8, 16, 32]
-    profile_models:
-      model1:
-        perf_analyzer_flags:
-          input-data: input.json(path to the input file/directory)
-        cpu_only: true
-        model_config_parameters:
-          dynamic_batching:
-            max_queue_delay_microseconds: [200, 400]
-          instance_group:
-            - kind: KIND_CPU
-              count: [1,2]
-    client_protocol: http
-    collect_cpu_metrics: True
-    triton_launch_mode: remote
-    triton_http_endpoint: <TRITON_SERVER_IP>:<EXPOSED_HTTP_PORT_NUM>
-    triton_grpc_endpoint: <TRITON_SERVER_IP>:<EXPOSED_GRPC_PORT_NUM>
-    triton_metrics_url:   <TRITON_SERVER_IP>:<EXPOSED_METRIC_PORT_NUM>/metrics
-    override_output_model_repository: true
-    ```
+To pass the data as real input file json -  the tensors need to be flattened in a row-major format `data.flatten('C')`
 
-    To pass the data as real input file json -  the tensors need to be flattened in a row-major format `data.flatten('C')`
-
-    Example of input.json file:
-    ```
-    {"data":
+Example of input.json file:
+    
+    
+    ```{"data":
       [
         {
           "IN0":
@@ -610,13 +616,14 @@ NOTE: We support only ```KIND_CPU```. Need to pass ```cpu_only: true``` paramete
             ],
                 "shape": [4]
             }
-    }]} 
-    ```
+    }]} ```
+    
 
 
-    Example of directory:
-    Directory must contains the file with the same name of Input mentioned in config.pbtxt of the model. Example here `IN0`
-    Text inside `IN0` present in below format
+ Example of directory:
+Directory must contains the file with the same name of Input mentioned in config.pbtxt of the model. Example here `IN0`
+Text inside `IN0` present in below format
+
     ```
     92.5596638292661
     7.103605819788694
@@ -625,21 +632,21 @@ NOTE: We support only ```KIND_CPU```. Need to pass ```cpu_only: true``` paramete
     ```
 
 
-    More info about configuration parameters can be found [here](https://github.com/triton-inference-server/model_analyzer/blob/r24.07/docs/config.md)
-    More info about performance analyzer metrics [here](https://github.com/triton-inference-server/perf_analyzer/blob/main/README.md)
-    More info about the real input to be passed for model profiling [here](https://github.com/triton-inference-server/perf_analyzer/blob/main/docs/input_data.md)
+More info about configuration parameters can be found [here](https://github.com/triton-inference-server/model_analyzer/blob/r24.07/docs/config.md)
+More info about performance analyzer metrics [here](https://github.com/triton-inference-server/perf_analyzer/blob/main/README.md)
+More info about the real input to be passed for model profiling [here](https://github.com/triton-inference-server/perf_analyzer/blob/main/docs/input_data.md)
 
   
 ## Model Analyzer Generated Metadata:
-    result: A csv file which contains all the all the configuration permutation and combination results.  
+result: A csv file which contains all the all the configuration permutation and combination results.  
 
-    reports: Summary and detailed HTML report of best 3 configurations of the model. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/report.md)
+reports: Summary and detailed HTML report of best 3 configurations of the model. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/report.md)
 
-    checkpoints: Model Analyzer will save a checkpoint after all the perf analyzer runs for a given model are complete. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/checkpoints.md)
+checkpoints: Model Analyzer will save a checkpoint after all the perf analyzer runs for a given model are complete. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/checkpoints.md)
     
-    output_model_repository: A directory contains all the optimal configurations that are experimented.
+output_model_repository: A directory contains all the optimal configurations that are experimented.
     
-    plots: A directory consists of images of plots of different calculated parameters.
+plots: A directory consists of images of plots of different calculated parameters.
 
 
 
