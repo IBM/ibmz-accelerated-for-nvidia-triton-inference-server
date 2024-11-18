@@ -538,11 +538,11 @@ Inference Server by measuring changes in performance as you experiment with diff
 
 Automatically runs multiple configuration combinations provided search (Optuna, Quick, Brute, Manual) in different modes(Remote, Local)
 
-Metrics : Provides multiple metrics Throughput (infer/sec), P99/ p95/ p90/ p50/ Average Latency (ms),  Inference count RAM Usage vs Latency, Server compute output, input, infer, queue time
+- **Metrics** : Provides multiple metrics Throughput (infer/sec), P99/ p95/ p90/ p50/ Average Latency (ms),  Inference count RAM Usage vs Latency, Server compute output, input, infer, queue time
 
-Detailed and summary reports: Model Analyzer is  able to generate summarized and detailed reports that can help you better understand the trade-offs between different model configurations that can be used for your mode
+- **Detailed and summary reports**: Model Analyzer is  able to generate summarized and detailed reports that can help you better understand the trade-offs between different model configurations that can be used for your mode
 
-QoS (Quality of Service) Constraints: Constraints can help you filter out the Model Analyzer results based on your QoS requirements.
+- **QoS (Quality of Service) Constraints**: Constraints can help you filter out the Model Analyzer results based on your QoS requirements.
 
 NOTE: If your model requires a custom backend when running on the Triton Inference Server please use either local or remote mode. [here](https://github.com/triton-inference-server/model_analyzer/blob/r24.07/docs/launch_modes.md)
 
@@ -552,7 +552,7 @@ NOTE: We support only ```KIND_CPU```. Need to pass ```cpu_only: true``` paramete
 
 Model Analyzer must provide the yaml file which contains the information about the model profiling.
     
-LOCAL MODE: Local mode is the default mode if no triton-launch-mode is specified.
+- **LOCAL MODE** : Local mode is the default mode if no triton-launch-mode is specified.
     
 ```
 model_repository: /models
@@ -569,7 +569,7 @@ override_output_model_repository: true
 ```   
     
     
-REMOTE MODE:This mode is beneficial when you want to use an already running Triton Inference Server.
+- **REMOTE MODE** :This mode is beneficial when you want to use an already running Triton Inference Server.
 You may provide the URLs for the Triton instance's HTTP or GRPC endpoint depending on your chosen client 
 protocol using the --triton-grpc-endpoint, and --triton-http-endpoint flags.Triton Server in this mode needs to be 
 launched with --model-control-mode explicit flag to support loading/unloading of the models.
@@ -601,7 +601,7 @@ override_output_model_repository: true
 
 To pass the data as real input file json -  the tensors need to be flattened in a row-major format `data.flatten('C')`
 
-Example of input.json file:
+- **Example of input.json file** :
     
     
     ```{"data":
@@ -616,16 +616,14 @@ Example of input.json file:
             ],
                 "shape": [4]
             }
-    }]} ```
+    }]}
+    ```
     
-
-
- Example of directory:
+- **Example of directory**:
 Directory must contains the file with the same name of Input mentioned in config.pbtxt of the model. Example here `IN0`
 Text inside `IN0` present in below format
 
-    ```
-    92.5596638292661
+    ```92.5596638292661
     7.103605819788694
     abcd
     efgh
@@ -638,15 +636,15 @@ More info about the real input to be passed for model profiling [here](https://g
 
   
 ## Model Analyzer Generated Metadata:
-result: A csv file which contains all the all the configuration permutation and combination results.  
+- **result**: A csv file which contains all the all the configuration permutation and combination results.  
 
-reports: Summary and detailed HTML report of best 3 configurations of the model. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/report.md)
+- **reports** : Summary and detailed HTML report of best 3 configurations of the model. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/report.md)
 
-checkpoints: Model Analyzer will save a checkpoint after all the perf analyzer runs for a given model are complete. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/checkpoints.md)
+- **checkpoints** : Model Analyzer will save a checkpoint after all the perf analyzer runs for a given model are complete. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/checkpoints.md)
     
-output_model_repository: A directory contains all the optimal configurations that are experimented.
+- **output_model_repository** : A directory contains all the optimal configurations that are experimented.
     
-plots: A directory consists of images of plots of different calculated parameters.
+- **plots** : A directory consists of images of plots of different calculated parameters.
 
 
 
