@@ -629,15 +629,15 @@ efgh
 - More info about the real input to be passed for model profiling [here](https://github.com/triton-inference-server/perf_analyzer/blob/main/docs/input_data.md)
 
 ## Model Analyzer Generated Metadata:
-result: A csv file which contains all the all the configuration permutation and combination results.  
+- **result**: A csv file which contains all the all the configuration permutation and combination results.  
 
-reports: Summary and detailed HTML report of best 3 configurations of the model. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/report.md)
+- **reports**: Summary and detailed HTML report of best 3 configurations of the model. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/report.md)
 
-checkpoints: Model Analyzer will save a checkpoint after all the perf analyzer runs for a given model are complete. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/checkpoints.md)
+- **checkpoints**: Model Analyzer will save a checkpoint after all the perf analyzer runs for a given model are complete. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/checkpoints.md)
 
-output_model_repository: A directory contains all the optimal configurations that are experimented.
+- **output_model_repository**: A directory contains all the optimal configurations that are experimented.
 
-plots: A directory consists of images of plots of different calculated parameters.
+- **plots**: A directory consists of images of plots of different calculated parameters.
 
 # REST APIs <a id="triton-server-restapi"></a>
 
