@@ -64,7 +64,7 @@ IBM z16 and later. No changes to the original model are needed to take advantage
 of the new inference acceleration capabilities.
 
 Please visit the section
-[Downloading theIBM Z Accelerated for NVIDIA Triton™ Inference Server container image](#container)<!--markdownlint-disable-line MD013 -->
+[Downloading the IBM Z Accelerated for NVIDIA Triton™ Inference Server container image](#container)<!--markdownlint-disable-line MD013 -->
 to get started.
 
 # Downloading the IBM Z Accelerated for NVIDIA Triton™ Inference Server container image <a id="container"></a> <!--markdownlint-disable-line MD013 -->
@@ -381,12 +381,12 @@ This backend supports importing tree ensembles models that were trained with oth
 ### Backend Usage Information
 In Order to deploy any model on Triton Inference Server, one should have a model repository and Model configuration ready. 
 
-Model Configuration: The model configuration  ```(config.pbtxt)``` in Triton Inference Server defines metadata, optimization settings, and customised  parameters for each model. This configuration ensures models are served with optimal performance and tailored behaviour.For more details [Model Configuration](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_configuration.md).
+Model Configuration: The model configuration  ```(config.pbtxt)``` in Triton Inference Server defines metadata, optimization settings, and customised  parameters for each model. This configuration ensures models are served with optimal performance and tailored behaviour. For more details [Model Configuration](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_configuration.md).
 
 ### Models Repository
 Like all Triton backends, models deployed via the Snap ML C++ Backend make use of a specially laid-out "model repository" directory containing at least one serialized model and a "config.pbtxt" configuration file.
 
-Typically, a models directory should look like below: 
+Typically, a model's directory should look like below: 
 
 ```
 models
@@ -433,8 +433,8 @@ parameters {
   }
 }
 backend: "ibmsnapml"
-
 ```
+
 ### Configuration Parameters:
 
 - **Backend** :
@@ -446,7 +446,7 @@ backend: "ibmsnapml"
    This configuration file parameter specifies the name of the file to be used for preprocessing. The preprocessing file must be named as ‘pipeline.json’
    when preprocessing is selected for end-to-end inferencing.
 
-   If this parameter is not provided, the backend assumes that preprocessing is not required,even if pipeline.json is present in the model repository.
+   If this parameter is not provided, the backend assumes that preprocessing is not required, even if pipeline.json is present in the model repository.
 
    ```
    parameters {
@@ -497,7 +497,7 @@ backend: "ibmsnapml"
 - **PREDICT_PROBABILITY** : 
     This Configuration parameter  controls whether the model’s prediction is to be in terms of   probability. 
 
-  If Predict probability is choosen user should add the ```PREDICT_PROBABILITY``` parameter and set the ```output``` dimensions to 2, as it will return probabilities for both classes in a      binary classification, as shown below:
+  If Predict probability is chosen, user should add the ```PREDICT_PROBABILITY``` parameter and set the ```output``` dimensions to 2, as it will return probabilities for both classes in a      binary classification, as shown below:
   
   Note that  ```PREDICT_PROBABILITY``` is case sensitive and accepts only ```‘true’``` or ```‘false’``` . Any other values apart from these like 
   (True/False/1/0) are provided , by default ```‘false’``` will be assumed and it will not provide the probability.
@@ -521,16 +521,16 @@ backend: "ibmsnapml"
     inputs and output tensors check documentation of Triton Inference server [here](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_configuration.md#model-configuration)).The name specified for an input or output tensor must match the name 
     expected by the model. An input shape indicates the shape of an input tensor expected by the model and by Triton inference request. An output 
     shape indicates the shape of an output tensor produced by the model and returned by Triton in response to an inference request. Both input and output 
-    shape must have rank greater-or-equal-to 1, that is, the empty shape [ ] is not allowed.In case of preprocessing, the data type of Input 
-    must be ```TYPE_STRING```and output tensor is ```TYPE_FP64```. For more details on 
-    supported tensor data types by Triton Inference server ,vist [here](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_configuration.md#datatypes).
+    shape must have rank greater-or-equal-to 1, that is, the empty shape [ ] is not allowed. In case of preprocessing, the data type of Input 
+    must be ```TYPE_STRING``` and output tensor is ```TYPE_FP64```. For more details on 
+    supported tensor data types by Triton Inference server, visit [here](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_configuration.md#datatypes).
 
 # Triton Model Analyzer<a id="triton-model-analyzer"></a>
 Triton Model Analyzer is a CLI tool which can help you find a more optimal configuration, on a given piece of hardware,
 for single, multiple, ensemble, or BLS models running on a Triton Inference Server. It will also generate reports to
 help you better understand the trade-offs of the different configurations along with their compute and memory requirements.
 
-Triton Model Analyzer uses Triton Performance Analyzer to calculate inefernce server side metrics.
+Triton Model Analyzer uses Triton Performance Analyzer to calculate inference server side metrics.
 
 ## Triton Performance Analyzer:
 Triton Performance Analyzer is CLI tool which can help you optimize the inference performance of models running on Triton
@@ -549,102 +549,95 @@ NOTE: If your model requires a custom backend when running on the Triton Inferen
 NOTE: We support only ```KIND_CPU```. Need to pass ```cpu_only: true``` parameter in config.yaml [here](https://github.com/triton-inference-server/model_analyzer/issues/927)
 
 ## Configuring Model Analyzer:
-    Model Analyzer must provide the yaml file whcih contains the information about the model profiling:
-    
-    LOCAL MODE: Local mode is the default mode if no triton-launch-mode is specified.
-    ```
-    model_repository: /models
-    profile_models: 
-      model1:
-        perf_analyzer_flags:
-          input-data: input.json(path to the input file/directory)
-        cpu_only: true
-    run_config_search_mode: quick
-    run_config_search_max_instance_count: 4
-    run_config_search_max_concurrency: 16
-    run_config_search_min_model_batch_size: 8
-    override_output_model_repository: true
 
-    ```
-    REMOTE MODE:This mode is beneficial when you want to use an already running Triton Inference Server.
-    You may provide the URLs for the Triton instance's HTTP or GRPC endpoint depending on your chosen client 
-    protocol using the --triton-grpc-endpoint, and --triton-http-endpoint flags.Triton Server in this mode needs to be 
-    launched with --model-control-mode explicit flag to support loading/unloading of the models.
-    ```
-    run_config_search_disable: True
-    concurrency: [2, 4, 8, 16, 32]
-    batch_sizes: [8, 16, 32]
-    profile_models:
-      model1:
-        perf_analyzer_flags:
-          input-data: input.json(path to the input file/directory)
-        cpu_only: true
-        model_config_parameters:
-          dynamic_batching:
-            max_queue_delay_microseconds: [200, 400]
-          instance_group:
-            - kind: KIND_CPU
-              count: [1,2]
-    client_protocol: http
-    collect_cpu_metrics: True
-    triton_launch_mode: remote
-    triton_http_endpoint: <TRITON_SERVER_IP>:<EXPOSED_HTTP_PORT_NUM>
-    triton_grpc_endpoint: <TRITON_SERVER_IP>:<EXPOSED_GRPC_PORT_NUM>
-    triton_metrics_url:   <TRITON_SERVER_IP>:<EXPOSED_METRIC_PORT_NUM>/metrics
-    override_output_model_repository: true
-    ```
+Model Analyzer must provide the yaml file which contains the information about the model profiling:
 
-    To pass the data as real input file json -  the tensors need to be flattened in a row-major format `data.flatten('C')`
+LOCAL MODE: Local mode is the default mode if no triton-launch-mode is specified.
+```yaml
+model_repository: /models
+profile_models: 
+  model1:
+    perf_analyzer_flags:
+      input-data: input.json(path to the input file/directory)
+    cpu_only: true
+run_config_search_mode: quick
+run_config_search_max_instance_count: 4
+run_config_search_max_concurrency: 16
+run_config_search_min_model_batch_size: 8
+override_output_model_repository: true
+```
 
-    Example of input.json file:
-    ```
-    {"data":
-      [
-        {
-          "IN0":
-            {   "content":[
-                "92.5596638292661",
-                "7.103605819788694",
-                "abcd",
-                "efgh"
-            ],
-                "shape": [4]
-            }
-    }]} 
-    ```
+REMOTE MODE: This mode is beneficial when you want to use an already running Triton Inference Server.
 
+You may provide the URLs for the Triton instance's HTTP or GRPC endpoint depending on your chosen client 
+protocol using the --triton-grpc-endpoint, and --triton-http-endpoint flags. Triton Server in this mode needs to be launched with --model-control-mode explicit flag to support loading/unloading of the models.
 
-    Example of directory:
-    Directory must contains the file with the same name of Input mentioned in config.pbtxt of the model. Example here `IN0`
-    Text inside `IN0` present in below format
-    ```
-    92.5596638292661
-    7.103605819788694
-    abcd
-    efgh
-    ```
+```yaml
+run_config_search_disable: True
+concurrency: [2, 4, 8, 16, 32]
+batch_sizes: [8, 16, 32]
+profile_models:
+  model1:
+    perf_analyzer_flags:
+      input-data: input.json(path to the input file/directory)
+    cpu_only: true
+    model_config_parameters:
+      dynamic_batching:
+        max_queue_delay_microseconds: [200, 400]
+      instance_group:
+        - kind: KIND_CPU
+          count: [1,2]
+client_protocol: http
+collect_cpu_metrics: True
+triton_launch_mode: remote
+triton_http_endpoint: <TRITON_SERVER_IP>:<EXPOSED_HTTP_PORT_NUM>
+triton_grpc_endpoint: <TRITON_SERVER_IP>:<EXPOSED_GRPC_PORT_NUM>
+triton_metrics_url:   <TRITON_SERVER_IP>:<EXPOSED_METRIC_PORT_NUM>/metrics
+override_output_model_repository: true
+```
 
+To pass the data as real input file json -  the tensors need to be flattened in a row-major format `data.flatten('C')`
 
-    More info about configuration parameters can be found [here](https://github.com/triton-inference-server/model_analyzer/blob/r24.07/docs/config.md)
-    More info about performance analyzer metrics [here](https://github.com/triton-inference-server/perf_analyzer/blob/main/README.md)
-    More info about the real input to be passed for model profiling [here](https://github.com/triton-inference-server/perf_analyzer/blob/main/docs/input_data.md)
+Example of input.json file:
+```json
+{"data":
+  [
+    {
+      "IN0":
+        {   "content":[
+            "92.5596638292661",
+            "7.103605819788694",
+            "abcd",
+            "efgh"
+        ],
+            "shape": [4]
+        }
+}]} 
+```
+Example of directory:
+Directory must contain the file with the same name of Input mentioned in config.pbtxt of the model. Example here `IN0`
+Text inside `IN0` present in below format
+```
+92.5596638292661
+7.103605819788694
+abcd
+efgh
+```
 
-  
+- More info about configuration parameters can be found [here](https://github.com/triton-inference-server/model_analyzer/blob/r24.07/docs/config.md)
+- More info about performance analyzer metrics [here](https://github.com/triton-inference-server/perf_analyzer/blob/main/README.md)
+- More info about the real input to be passed for model profiling [here](https://github.com/triton-inference-server/perf_analyzer/blob/main/docs/input_data.md)
+
 ## Model Analyzer Generated Metadata:
-    result: A csv file which contains all the all the configuration permutation and combination results.  
+- **result**: A csv file which contains all the all the configuration permutation and combination results.  
 
-    reports: Summary and detailed HTML report of best 3 configurations of the model. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/report.md)
+- **reports**: Summary and detailed HTML report of best 3 configurations of the model. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/report.md)
 
-    checkpoints: Model Analyzer will save a checkpoint after all the perf analyzer runs for a given model are complete. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/checkpoints.md)
-    
-    output_model_repository: A directory contains all the optimal configurations that are experimented.
-    
-    plots: A directory consists of images of plots of different calculated parameters.
+- **checkpoints**: Model Analyzer will save a checkpoint after all the perf analyzer runs for a given model are complete. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/checkpoints.md)
 
+- **output_model_repository**: A directory contains all the optimal configurations that are experimented.
 
-
-
-
+- **plots**: A directory consists of images of plots of different calculated parameters.
 
 # REST APIs <a id="triton-server-restapi"></a>
 
@@ -976,9 +969,9 @@ I0718 12:07:48.131561 1 server.cc:653
 Each model can have one or more versions. The ModelVersionPolicy property of the
 model configuration is used to set one of the following policies. 
 
-• All: Load all the versions of the model.All versions of the model that are available in the model repository are available for inferencing. `version_policy: { all: {}} `
+• All: Load all the versions of the model. All versions of the model that are available in the model repository are available for inferencing. `version_policy: { all: {}} `
 
-• Latest: Only the latest ‘n’versions of the model in the repository are available for inferencing. The latest versions of the model are the numerically greatest version numbers.`version_policy: { latest: { num_versions: 2}}`
+• Latest: Only the latest ‘n’ versions of the model in the repository are available for inferencing. The latest versions of the model are the numerically greatest version numbers.`version_policy: { latest: { num_versions: 2}}`
 
 • Specific: Only the specifically listed versions of the model are available for inferencing. `version_policy: {specific: { versions: [1,3]}}` If no version policy is specified, then Latest (with n=1) is used as the default, indicating that only the most recent version of the model is made available by Triton. In all cases, the addition or removal of version subdirectories from the model repository can change which model version is used on subsequent inference requests.
 
@@ -1159,7 +1152,7 @@ Major version changes are not frequent and may include features supporting new
 IBM Z hardware as well as major feature changes in Triton Inference Server that
 are not likely backward compatible.
 
-## IBM Z Accelerated for for NVIDIA Triton™ Inference Server versions
+## IBM Z Accelerated for NVIDIA Triton™ Inference Server versions
 
 Each release version of IBM Z Accelerated for NVIDIA Triton™ Inference Server
 has the form MAJOR.MINOR.PATCH (X.Y.Z). For example, IBM Z Accelerated for
