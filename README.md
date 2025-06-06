@@ -1643,7 +1643,7 @@ Foundation, the exclusive licensee of Linus Torvalds, owner of the mark on a
 worldwide basis.
 
 NVIDIA and Triton are trademarks and/or registered trademarks of NVIDIA
-Corporation in the U.S. and/or other countries.
+Corporation in the U.S. and/or other countries. 
 
 Docker and the Docker logo are trademarks or registered trademarks of Docker,
 Inc. in the United States and/or other countries. Docker, Inc. and other parties
