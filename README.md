@@ -45,6 +45,7 @@ Triton Inference Server python backend enables pre-processing, post-processing
 and server models written in python programming language. This enables IBM Snap
 ML support on IBM Z.
 
+
 The models being served by Triton Inference Server can be queried and controlled
 by a dedicated model management API that is available by HTTP/REST or GRPC
 protocol, or by the C API.
@@ -52,19 +53,9 @@ protocol, or by the C API.
 The model repository is a file-system based repository of the models that Triton Inference Server will make available for a
 deployment.
 
-On IBM® z16™ and later (running Linux on IBM Z or IBM® z/OS® Container
-Extensions (IBM zCX)), With Triton Inference server 2.48.0 python backend for IBM
-Snap ML or custom backend like ONNX-MLIR will leverage new inference
-acceleration capabilities that transparently target the IBM Integrated
-Accelerator for AI through the
-[IBM z Deep Neural Network (zDNN)](https://github.com/IBM/zDNN) library. The IBM
-zDNN library contains a set of primitives that support Deep Neural Networks.
-These primitives transparently target the IBM Integrated Accelerator for AI on
-IBM z16 and later. No changes to the original model are needed to take advantage
-of the new inference acceleration capabilities.
 
 Please visit the section
-[Downloading theIBM Z Accelerated for NVIDIA Triton™ Inference Server container image](#container)<!--markdownlint-disable-line MD013 -->
+[Downloading the IBM Z Accelerated for NVIDIA Triton™ Inference Server container image](#container)<!--markdownlint-disable-line MD013 -->
 to get started.
 
 # Downloading the IBM Z Accelerated for NVIDIA Triton™ Inference Server container image <a id="container"></a> <!--markdownlint-disable-line MD013 -->
@@ -119,7 +110,7 @@ GitHub Repository, or you can click
 
 # IBM Z Accelerated for NVIDIA Triton™ Inference Server container image usage <a id="launch-container"></a> <!--markdownlint-disable-line MD013 -->
 
-For documentation on  how models can be served with Triton Inference Server, please visit the official 
+For documentation on how models can be served with Triton Inference Server, please visit the official 
 
 [Open Source Triton Inference Server documentation](https://docs.nvidia.com/deeplearning/triton-inference-server/archives/triton-inference-server-2410/user-guide/docs/index.html).
 
@@ -190,21 +181,7 @@ Inference Server is ready and non-200 if it is not ready.
 
 # Security and Deployment Guidelines <a id="security-and-deployment-guidelines"></a>
 
-Once the model been available either on a system or in a
-[model repository](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_repository.md),
-model can be deployed automatically by specifying the path to the model location
-while launching the Triton Inference Server.
-
-Command to start the Triton Inference Server
-
-```bash
-docker run --shm-size 1G --rm \
-    -p <TRITONSERVER_HTTP_PORT_NUM>:8000 \
-    -p <TRITONSERVER_GRPC_PORT_NUM>:8001 \
-    -p <TRITONSERVER_METRICS_PORT_NUM>:8002 \
-    -v $PWD/models:/models <triton_inference_server_image>   tritonserver \
-    --model-repository=/models
-```
+For security and deployment best practices, please visit the common AI Toolkit documentation found [here](https://github.com/IBM/ai-toolkit-for-z-and-linuxone?tab=readme-ov-file#recommended-deployment-guidelines-)
 
 ## Triton Inference Server using HTTPS/Secure gRPC
 
@@ -244,24 +221,20 @@ server, and to encrypt all the data exchanged between the gRPC client and the
 Triton Inference Server. Optional mechanisms are available for clients to
 provide certificates for mutual authentication
 
-- For security and deployment best practices, please visit the common AI Toolkit
-  documentation found
-  [here](https://github.com/IBM/ai-toolkit-for-z-and-linuxone).
 
 # IBM Z Accelerated for NVIDIA Triton™ Inference Server Backends <a id="triton-server-backends"></a>
 
-IBM Z Accelerated for NVIDIA Triton™ Inference Server supports three backends as
+IBM Z Accelerated for NVIDIA Triton™ Inference Server supports four backends as
 of today.
 
 - [Python Backend](#python-backend)
 - [ONNX-MLIR Backend](#onnx-mlir-backend)
 - [Snap ML C++ Backend](#snapml-cpp-backend)
+- [PyTorch Backend](#pytorch-backend)
 
 ## Python Backend <a id="python-backend"></a>
 
-Python backend Triton Inference Server has a Python backend that allows you to
-deploy machine learning models written in Python for inference. This backend is
-known as the "Python backend" or "Python script backend."
+Triton Inference Server supports the deployment of AI models or any logic written in Python via python backend. 
 
 For more details about triton python backend are documented [here](https://github.com/triton-inference-server/python_backend/tree/r24.07?tab=readme-ov-file#user-documentation)
 
@@ -297,7 +270,7 @@ backend: "python"
 Triton Inference Server exposes some flags to control the execution mode of models through parameters section in the model’s config.pbtxt file.
 
 - **Backend** :
-   Backend parameter must be provided as “python” while utilising ONNX-MLIR Backend. For more details related to backend [here](https://github.com/triton-inference-server/backend/blob/r24.07/README.md#backends)
+   Backend parameter must be provided as “python” while utilising Python Backend. For more details related to backend [here](https://github.com/triton-inference-server/backend/blob/r24.07/README.md#backends)
    
    ```
    backend: "python"
@@ -311,9 +284,8 @@ For more options see [Model Configuration](https://github.com/triton-inference-s
 Using the Python backend in Triton is especially useful for deploying custom
 models or models developed with specific libraries that are not natively
 supported by Triton's other backends. It provides a flexible way to bring in
-your own machine learning code and integrate it with the server's inference
-capabilities. It provides flexibility by allowing you to use any Python machine
-learning library to define your model's inference logic.
+your own AI model and integrate it with the server's inference
+capabilities. It provides flexibility by allowing you to use any Python machine learning/deep learning library to define your model's inference logic.
 
 NOTE:
 
@@ -323,9 +295,7 @@ NOTE:
 ## ONNX-MLIR Backend <a id="onnx-mlir-backend"></a>
 
 A triton backend which allows the deployment of onnx-mlir or zDLC compiled
-models (model.so) with the triton inference server. For more details about the
-onnx-mlir backend are documented
-[here](https://github.com/IBM/onnxmlir-triton-backend)
+models (model.so) with the triton inference server. 
 
 Format of the onnx-mlir backend model directory looks like below
 
@@ -375,7 +345,7 @@ NOTE: Multiple versions are supported, only positive values as version model are
 
 ## Snap ML C++ Backend <a id="snapml-cpp-backend"></a>
 
-Snap Machine Learning (Snap ML in short) is a library for training and scoring traditional machine learning models with end to end inferencing capabilities. As part of the preprocessing pipeline it supports Normalizer, Kbinsdiscritizer, and one-hot encoding  transformers. 
+Snap Machine Learning (Snap ML in short) is a library for training and scoring traditional machine learning models with end to end inferencing capabilities. As part of the preprocessing pipeline it supports Normalizer, Kbinsdiscritizer, TargetEncoder, OrdinalEncoder, and OneHotEncoder  transformers. 
 This backend supports importing tree ensembles models that were trained with other frameworks (e.g., scikit-learn, XGBoost, LightGBM) so one can leverage Integrated On-Chip Accelerator on IBM Z and IBM LinuxONE transparently via Snap ML’s accelerated inference engine. For more information on supported models refer Snap ML documentation [here](https://snapml.readthedocs.io/en/latest/model_import.html).
 
 ### Backend Usage Information
@@ -481,6 +451,7 @@ backend: "ibmsnapml"
      value {
        string_value: "pmml"
      }
+   }
    
    ```   
 - **NUM_OF_PREDICT_THREADS** :  
@@ -495,9 +466,9 @@ backend: "ibmsnapml"
   
   ``` 
 - **PREDICT_PROBABILITY** : 
-    This Configuration parameter  controls whether the model’s prediction is to be in terms of   probability. 
+    This Configuration parameter  controls whether the model’s prediction is to be in terms of probability. 
 
-  If Predict probability is choosen user should add the ```PREDICT_PROBABILITY``` parameter and set the ```output``` dimensions to 2, as it will return probabilities for both classes in a      binary classification, as shown below:
+  If Predict probability is chosen user should add the ```PREDICT_PROBABILITY``` parameter and set the ```output``` dimensions to 2, as it will return probabilities for both classes in a binary classification, as shown below:
   
   Note that  ```PREDICT_PROBABILITY``` is case sensitive and accepts only ```‘true’``` or ```‘false’``` . Any other values apart from these like 
   (True/False/1/0) are provided , by default ```‘false’``` will be assumed and it will not provide the probability.
@@ -525,6 +496,429 @@ backend: "ibmsnapml"
     must be ```TYPE_STRING```and output tensor is ```TYPE_FP64```. For more details on 
     supported tensor data types by Triton Inference server ,vist [here](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_configuration.md#datatypes).
 
+## PyTorch Backend <a id="pytorch-backend"></a>
+
+PyTorch Backend is a custom Python-based backend that enables the execution of PyTorch models on the IBM Z systems using the [ibmz-accelerated-for-pytorch](https://github.com/IBM/ibmz-accelerated-for-pytorch) framework. This backend provides the Python Backend's flexibility, with the ability to transparently leverage new hardware inference acceleration capabilities that target the IBM Integrated Accelerator for AI through PyTorch.
+
+### Backend Usage Information
+
+To deploy any model on Triton Inference Server, one should have a model repository ready.
+
+The following is the model repository structure :
+
+```text
+$ model_1
+   |-- 1
+   |   |-- model.py ( Model file ) 
+   |   `-- model.pth ( Model weights ) 
+   `-- config.pbtxt ( Model configuration ) 
+```
+
+#### Model file: <a id="pytorch-backend-model-file"></a>
+
+The user must provide a model file (default: `model.py` ) containing at least one class that inherits from `torch.nn.Module` to describe the model architecture. 
+
+Sample model.py file : 
+
+```
+import torch
+import torch.nn as nn
+
+class Net(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear1 = nn.Linear(5, 2, bias=False)
+        self.linear2 = nn.Linear(2, 1, bias=False)
+
+    def forward(self, x):
+        x = self.linear1(x)
+        x = self.linear2(x)
+        return x
+```
+
+Notes: 
+
+- The model must return the correctly batched output in case of batched inputs. For example, if the input shape is (batch_size, 5), then each output tensor shape must be (batch_size,1).
+- The default model file name is `model.py`; however, the user can change it to any other name using `default_model_filename` parameter in config.pbtxt, you can find the details in the config section.
+- If the default model file has more than one class that is an extension of `torch.nn.Module`, then the user must provide the name of the main class to be used as the model class. This is done via the `model_class_name` config parameter, you can find the details in the config section.
+    
+
+#### Model weights:
+
+The user can provide model weights in supported formats which contains the saved [state_dict](https://pytorch.org/tutorials/beginner/saving_loading_models.html#saving-loading-model-for-inference) of the model.
+
+Note : The file name must be either `model.pth` or `model.bin` or `model.pt`.
+
+In case of complex deployments, the model weights can be directly accessed from `model.py` by using the absolute path or relative path of the weights file/folder. 
+
+For example : 
+
+Model weights can also be stored in the model repository, 
+
+```text
+$ model_1
+   |-- 1
+   |   |-- model.py
+   |   `-- weights
+   |      |-- encoder.bin
+   |      `-- classifier.bin
+   `-- config.pbtxt
+```
+In this case, the `model.py` can access the weights in the following way :
+
+```
+import os
+import torch 
+import torch.nn as nn 
+from pathlib import Path
+
+class MyCustomWeighsModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        ...
+        ...
+        current_file_path = Path(__file__).resolve()
+        encoder_weights_path = os.path.join(current_file_path.parent, "weights/encoder.bin")
+        classifier_weights_path = os.path.join(current_file_path.parent, "weights/classifier.bin")
+
+        ...
+
+        self.encoder_model.load_state_dict(torch.load(encoder_weights_path))
+        self.classifier_model.load_state_dict(torch.load(classifier_weights_path))
+
+        ...
+
+    def forward(self, ...):
+        ....
+        
+```
+
+Note: When providing a different weights path ( as shown in the example above ), please make sure that you do not have any of the default weights file (`model.pth` or `model.bin` or `model.pt` ) in model folder (`model_repository/model_name/model_version/`). 
+
+#### Model Configuration:
+
+Every PyTorch Backend model must provide config.pbtxt file describing the model configuration. The model configuration (config.pbtxt) in Triton Inference Server defines metadata, optimization settings, and customised parameters for each model. This configuration ensures models are served with optimal performance and tailored behaviour. For more details [Model Configuration](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_configuration.md).
+
+
+Below is a sample `config.pbtxt` for Python Backend:
+
+ ```
+ max_batch_size: 32
+ backend: "pytorch"
+ input {
+   name: "IN0"
+   data_type: TYPE_FP32
+   dims: 5
+ }
+ output {
+   name: "OUT0"
+   data_type: TYPE_FP64
+   dims: 1
+ }
+ ```
+
+Configuration Parameters:
+
+Triton Inference Server exposes some flags to control the execution mode of models through the parameters section in the model’s config.pbtxt file.
+
+- **Backend** :
+   Backend parameter must be provided as “pytorch” while utilising the PyTorch Backend. 
+   
+   ```
+   backend: "pytorch"
+   ```
+   
+- **Inputs and Outputs:** : 
+    Each model input and output must specify a name, datatype, and shape. For more details on inputs and output tensors, check the documentation of Triton Inference server [here](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_configuration.md#inputs-and-outputs).
+
+  In case of multiple inputs and multiple outputs, the ```forward``` method of the model class provided in `model.py` must take the inputs in the same sequence as specified in `config.pbtxt` and  must return the outputs in the same sequence as specified in `config.pbtxt`.
+    
+    For example,
+    
+    If `config.pbtxt` contains :
+    
+    ```
+    input [
+      {
+        name: "input_1"
+        data_type: TYPE_FP32
+        dims: [ 128 ]
+      },
+      {
+        name: "input_2"
+        data_type: TYPE_FP32
+        dims: [ 128 ]
+      }
+    ]
+    output [
+      {
+        name: "predicted_class"
+        data_type: TYPE_FP32
+        dims: [ 1 ]
+      },
+      {
+        name: "confidence"
+        data_type: TYPE_FP32
+        dims: [ 1 ]
+      }
+    ]
+    ```
+    
+    Then `model.py` should look like : 
+    
+    ```
+    class MyCustomModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            ...
+    
+        def forward(self, input_1, input_2):
+            ...
+            ...
+            return predicted_class, confidence
+      ```
+
+- **Extra parameters:** :
+
+    - hw_optm
+    
+        This parameter allows the user to decide the type of hardware optimization for the model inferencing: ```cpu``` or ```nnpa``` ( the IBM Integrated Accelerator for AI ). If not specified, the PyTorch backend will decide the hardware optimization based on the availability, i.e, if NNPA is available, it will use NNPA as the default hardware optimization, else CPU.
+
+        ```
+        parameters {
+            key: "hw_optm"
+            value {
+                string_value: "nnpa"
+                }
+            }
+        ```
+    
+    - model_class_name
+ 
+      If the default model file contains more than one class that is an extension of `torch.nn.Module`, then the user must provide the name of the class that should be taken as the model class by pytorch backend.  
+    
+        ```
+        parameters {
+            key: "model_class_name"
+            value {
+                string_value: "ParentNet"
+                }
+            }
+        ```
+    - default_model_filename
+ 
+      This parameter allows the user to change the name of the default model file. If not specified, the default model file name will be set as `model.py`.  The default model file must follow the structure defined in the [model file](#pytorch-backend-model-file) section.  This parameter could be useful if the model source code is modularized across multiple `.py` files.      
+    
+        ```
+        parameters {
+            key: "default_model_filename"
+            value {
+                string_value: "custom_model.py"
+                }
+            }
+        ```
+
+The PyTorch Backend also supports the config parameters available in the open-source Triton-Inference-Server pytorch_backend. Please refer to the customization guide [here](https://github.com/triton-inference-server/pytorch_backend?tab=readme-ov-file#customization)
+
+### PyTorch Backend: Extension to utilize Hugging Face models via checkpoints.
+
+To leverage this feature, AI practitioners and personas has to extend the ibmz-accelerated-for-nvidia-triton-inference-server image by installing transformers via `pip3 install transformers==4.42.0`
+
+This enables the deployment of the model classes available in the `transformers` library ( such as `BertModel`, `RobertaModel` ) with just trained weights. 
+
+In this case, the model repository structure would look like :
+
+```text
+$ model_1
+   |-- 1
+   |   |-- data ( Model weights folder ) 
+   |   |   |-- ... ( model files ) 
+   `-- config.pbtxt ( Model configuration ) 
+```
+
+For example :
+
+```text
+$ bert_base_cased_model/
+   ├── 1
+   │   └── data
+   │       ├── bert-base-cased
+   │       │   ├── config.json
+   │       │   ├── pytorch_model.bin
+   |       |   | ...
+   │       │   ├── special_tokens_map.json
+   │       │   ├── tokenizer_config.json
+   │       │   └── vocab.txt
+   └── config.pbtxt
+```
+
+With this feature, the user can deploy models in two ways: with Tokenizer and without Tokenizer. The tokenizer is a tool that transforms raw text into numerical inputs (token IDs, attention masks, etc.) suitable for transformer models.   
+
+#### With Tokenizer (string inputs): 
+
+When an encoder LLM model is deployed with tokenizer, the Triton server will tokenize the incoming data before sending it to the encoder model. Hence, users must provide string inputs in the inference requests.  
+
+The user must provide tokenizer information in config.pbtxt file, this information includes ( tokenizer_instance_name, tokenizer_weights, and tokenizer_kwargs). Please refer to [Extra config parameters](#pytorch-backend-extra-config-parameters) section for the details of these parameters.  
+
+The weights_folder must contain model weights (such as config.json, pytorch_model.pt) as well as tokenizer weights (such as tokenizer_config.json, vocab.txt/tokenizer.json). 
+
+Note: The models with custom tokenization, such as BertForMultipleChoice, are not currently supported for this feature. 
+
+The supported models for this deployment type are : 
+
+    "BertModel" 
+    "BertForPreTraining"
+    "BertLMHeadModel"
+    "BertForMaskedLM"
+    "BertForNextSentencePrediction"
+    "BertForSequenceClassification"
+    "BertForTokenClassification"
+    "BertForQuestionAnswering"
+
+    "RobertaModel"
+    "RobertaForCausalLM"
+    "RobertaForMaskedLM"
+    "RobertaForSequenceClassification"
+    "RobertaForTokenClassification"
+    "RobertaForQuestionAnswering"
+
+    "AutoModel" 
+    "AutoModelForPreTraining"
+    "AutoModelForMaskedLM" 
+    "AutoModelForCausalLM"
+    "AutoModelForNextSentencePrediction"
+    "AutoModelForSequenceClassification" 
+    "AutoModelForTokenClassification"
+    "AutoModelForQuestionAnswering"
+
+    
+
+#### Without Tokenizer (non-string inputs): 
+
+When an encoder model is deployed without tokenizer, triton server will not tokenize the incoming data. Hence, users must provide already tokenized data (“input_ids” and “attention_mask”) in the inputs of the inference request. 
+
+In config.pbtxt, the user must at least provide “input_ids”. 
+ 
+
+***Extra config parameters*** : <a id="pytorch-backend-extra-config-parameters"></a>
+
+ - is_hf_weights_model
+ 
+     This parameter tells the PyTorch backend that the given model is a transformers based weights model. In this case, PyTorch backend will not look for `model.py` file in the model repository. 
+
+     ```
+     parameters {
+         key: "is_hf_weights_model"
+         value {
+             string_value: "true"
+             }
+         }
+     ```
+    
+ - model_instance_name
+
+   The name of the transformers model instance to be used by the backend. The name provided here must be importable from the transformers library. For example, you can chose name "BertModel" if `python3 -c "from transformers import BertModel"` works. Other examples could be, `AutoModel`, `RobertaModel`, `BertForSequenceClassification`, etc. 
+ 
+     ```
+     parameters {
+         key: "model_instance_name"
+         value {
+             string_value: "BertModel"
+             }
+         }
+     ```
+ - model_instance_output_fetch_attr
+
+   The name of the attribute to be fetched from the model output. These attributes must be the supported attributes for that particular model instance output. For example, for `BertModel`, the supported attributes are `last_hidden_state`, `pooler_outputs`, etc.  You can refer to [this](https://huggingface.co/docs/transformers/en/main_classes/output) documentation to understand the transformers model output attributes. 
+ 
+     ```
+     parameters {
+         key: "model_instance_output_fetch_attr"
+         value {
+             string_value: "last_hidden_state"
+             }
+         }
+     ```
+
+     Note: If the user wants to use multiple outputs, the names must be specified in a comma-separated fashion and the number of model_instance_output_fetch_attributes must match the number of entries in the `outputs` section of the config.pbtxt. 
+        
+ - weights_path
+
+   The `absolute` or `relative path` ( w.r.t model version folder) to the folder where model weights are stored. For example, if the model version folder path is `/model_repository/bert_base_cased_model/1/`, then your weights_path can be `data` ( relative path ) or `/model_repository/bert_base_cased_model/1/data/`. 
+ 
+     ```
+     parameters {
+         key: "weights_path"
+         value {
+             string_value: "data"
+             }
+         }
+     ```
+
+ - model_weights
+
+   The name of the model weights folder present in `weights_path`. For example if your model weights are present at `/model_repository/bert_base_cased_model/1/data/bert-base-cased` then your `weights_path` will be  `/model_repository/bert_base_cased_model/1/data/` and `model_weights` will be `bert-base-cased`. 
+ 
+     ```
+     parameters {
+         key: "model_weights"
+         value {
+             string_value: "bert-base-cased"
+             }
+         }
+     ```
+
+ - tokenizer_instance_name
+
+   Similar to  `model_instance_name`, this field should contain the name of the transformers tokenizer instance to be used by the backend. The name provided here must be importable from the transformers library. For example, you can choose the name "BertTokenizer" if `python3 -c "from transformers import BertTokenizer"` works. Other examples could be `AutoTokenizer`, `RobertaTokenizer`, etc. 
+ 
+     ```
+     parameters {
+         key: "tokenizer_instance_name"
+         value {
+             string_value: "BertTokenizer"
+             }
+         }
+     ```
+
+Note: If the `tokenizer_instance_name` field is provided in the `config.pbtxt`, then the backend expects the string inputs ( and not tensors ); thus, in this case, the `inputs` field in `config.pbtxt` must be of `TYPE_STRING` data type. 
+     
+
+ - tokenizer_weights
+
+   The name of the tokenizer weights folder present in `weights_path`. For example, In case of hugging face deployments, if your model weights are present at `/model_repository/bert_base_cased_model/1/data/bert-base-cased` then your `weights_path` will be  `/model_repository/bert_base_cased_model/1/data/` and `tokenizer_weights` will be `bert-base-cased`. As in this case, the same folder (`bert-base-cased`) contains both model and tokenizer weights.    
+ 
+     ```
+     parameters {
+         key: "tokenizer_weights"
+         value {
+             string_value: "bert-base-cased"
+             }
+         }
+     ```
+
+ - tokenizer_kwargs
+
+   The tokenizer's keyword arguments. These arguments will be passed to the `from_pretrained` method of the [tokenizer](https://huggingface.co/docs/transformers/en/main_classes/tokenize). The input string value must be JSON serializable, as shown in the example below.
+   Note: You can quickly verify if your input string is correct or not by running a Python snippet like this `import json ; json.loads("{\"padding\":\"max_length\", \"max_length\": 128 , \"truncation\": true}")`
+ 
+     ```
+     parameters {
+         key: "tokenizer_kwargs"
+         value {
+             string_value: "{\"padding\":\"max_length\", \"max_length\": 128 , "{\"truncation\": true}"
+             }
+         }
+     }
+     ```
+
+Note: 
+
+- This feature is only for the models available in Transformers package and whose weights are compatible by `from_pretrained` method of transformers models/tokenizers. Please refer to [this](https://huggingface.co/docs/transformers/en/models) document to understand model loading.
+- If `is_hf_weights_model` is set to `true` the following config parameters will be ignored: `model_class_name` and `default_model_filename`.
+- With this feature, you can either deploy models accepting pre-tokenized inputs ( string inputs ) or post-tokenized inputs ( `input_ids`, `attention_mask`, etc ). This is determined based on whether the tokenization information ( `tokenizer_instance_name`, `tokenizer_weights`, and `tokenizer_kwargs` ) is provided in the `config.pbtxt`.
+
+
 # Triton Model Analyzer<a id="triton-model-analyzer"></a>
 Triton Model Analyzer is a CLI tool which can help you find a more optimal configuration, on a given piece of hardware,
 for single, multiple, ensemble, or BLS models running on a Triton Inference Server. It will also generate reports to
@@ -549,97 +943,100 @@ NOTE: If your model requires a custom backend when running on the Triton Inferen
 NOTE: We support only ```KIND_CPU```. Need to pass ```cpu_only: true``` parameter in config.yaml [here](https://github.com/triton-inference-server/model_analyzer/issues/927)
 
 ## Configuring Model Analyzer:
-    Model Analyzer must provide the yaml file whcih contains the information about the model profiling:
+
+Model Analyzer must provide the yaml file which contains the information about the model profiling:
+LOCAL MODE: Local mode is the default mode if no triton-launch-mode is specified.
+
+```
+model_repository: /models
+profile_models: 
+    model1:
+    perf_analyzer_flags:
+        input-data: input.json(path to the input file/directory)
+    cpu_only: true
+run_config_search_mode: quick
+run_config_search_max_instance_count: 4
+run_config_search_max_concurrency: 16
+run_config_search_min_model_batch_size: 8
+override_output_model_repository: true
+```
+
+REMOTE MODE:This mode is beneficial when you want to use an already running Triton Inference Server.
+You may provide the URLs for the Triton instance's HTTP or GRPC endpoint depending on your chosen client 
+protocol using the --triton-grpc-endpoint, and --triton-http-endpoint flags.Triton Server in this mode needs to be 
+launched with --model-control-mode explicit flag to support loading/unloading of the models.
     
-    LOCAL MODE: Local mode is the default mode if no triton-launch-mode is specified.
-    ```
-    model_repository: /models
-    profile_models: 
-      model1:
-        perf_analyzer_flags:
-          input-data: input.json(path to the input file/directory)
-        cpu_only: true
-    run_config_search_mode: quick
-    run_config_search_max_instance_count: 4
-    run_config_search_max_concurrency: 16
-    run_config_search_min_model_batch_size: 8
-    override_output_model_repository: true
+```
+run_config_search_disable: True
+concurrency: [2, 4, 8, 16, 32]
+batch_sizes: [8, 16, 32]
+profile_models:
+    model1:
+    perf_analyzer_flags:
+        input-data: input.json(path to the input file/directory)
+    cpu_only: true
+    model_config_parameters:
+        dynamic_batching:
+        max_queue_delay_microseconds: [200, 400]
+        instance_group:
+        - kind: KIND_CPU
+            count: [1,2]
+client_protocol: http
+collect_cpu_metrics: True
+triton_launch_mode: remote
+triton_http_endpoint: <TRITON_SERVER_IP>:<EXPOSED_HTTP_PORT_NUM>
+triton_grpc_endpoint: <TRITON_SERVER_IP>:<EXPOSED_GRPC_PORT_NUM>
+triton_metrics_url:   <TRITON_SERVER_IP>:<EXPOSED_METRIC_PORT_NUM>/metrics
+override_output_model_repository: true
+```
 
-    ```
-    REMOTE MODE:This mode is beneficial when you want to use an already running Triton Inference Server.
-    You may provide the URLs for the Triton instance's HTTP or GRPC endpoint depending on your chosen client 
-    protocol using the --triton-grpc-endpoint, and --triton-http-endpoint flags.Triton Server in this mode needs to be 
-    launched with --model-control-mode explicit flag to support loading/unloading of the models.
-    ```
-    run_config_search_disable: True
-    concurrency: [2, 4, 8, 16, 32]
-    batch_sizes: [8, 16, 32]
-    profile_models:
-      model1:
-        perf_analyzer_flags:
-          input-data: input.json(path to the input file/directory)
-        cpu_only: true
-        model_config_parameters:
-          dynamic_batching:
-            max_queue_delay_microseconds: [200, 400]
-          instance_group:
-            - kind: KIND_CPU
-              count: [1,2]
-    client_protocol: http
-    collect_cpu_metrics: True
-    triton_launch_mode: remote
-    triton_http_endpoint: <TRITON_SERVER_IP>:<EXPOSED_HTTP_PORT_NUM>
-    triton_grpc_endpoint: <TRITON_SERVER_IP>:<EXPOSED_GRPC_PORT_NUM>
-    triton_metrics_url:   <TRITON_SERVER_IP>:<EXPOSED_METRIC_PORT_NUM>/metrics
-    override_output_model_repository: true
-    ```
+To pass the data as real input file json -  the tensors need to be flattened in a row-major format `data.flatten('C')`
 
-    To pass the data as real input file json -  the tensors need to be flattened in a row-major format `data.flatten('C')`
-
-    Example of input.json file:
-    ```
-    {"data":
-      [
-        {
-          "IN0":
-            {   "content":[
-                "92.5596638292661",
-                "7.103605819788694",
-                "abcd",
-                "efgh"
-            ],
-                "shape": [4]
-            }
-    }]} 
-    ```
+Example of input.json file:
+```
+{"data":
+    [
+    {
+        "IN0":
+        {   "content":[
+            "92.5596638292661",
+            "7.103605819788694",
+            "abcd",
+            "efgh"
+        ],
+            "shape": [4]
+        }
+}]} 
+```
 
 
-    Example of directory:
-    Directory must contains the file with the same name of Input mentioned in config.pbtxt of the model. Example here `IN0`
-    Text inside `IN0` present in below format
-    ```
-    92.5596638292661
-    7.103605819788694
-    abcd
-    efgh
-    ```
+Example of directory:
+Directory must contains the file with the same name of Input mentioned in config.pbtxt of the model. Example here `IN0`
+Text inside `IN0` present in below format
+```
+92.5596638292661
+7.103605819788694
+abcd
+efgh
+```
 
 
-    More info about configuration parameters can be found [here](https://github.com/triton-inference-server/model_analyzer/blob/r24.07/docs/config.md)
-    More info about performance analyzer metrics [here](https://github.com/triton-inference-server/perf_analyzer/blob/main/README.md)
-    More info about the real input to be passed for model profiling [here](https://github.com/triton-inference-server/perf_analyzer/blob/main/docs/input_data.md)
+More info about configuration parameters can be found [here](https://github.com/triton-inference-server/model_analyzer/blob/r24.07/docs/config.md)
+More info about performance analyzer metrics [here](https://github.com/triton-inference-server/perf_analyzer/blob/main/README.md)
+More info about the real input to be passed for model profiling [here](https://github.com/triton-inference-server/perf_analyzer/blob/main/docs/input_data.md)
 
   
 ## Model Analyzer Generated Metadata:
-    result: A csv file which contains all the all the configuration permutation and combination results.  
 
-    reports: Summary and detailed HTML report of best 3 configurations of the model. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/report.md)
+result: A csv file which contains all the all the configuration permutation and combination results.  
 
-    checkpoints: Model Analyzer will save a checkpoint after all the perf analyzer runs for a given model are complete. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/checkpoints.md)
-    
-    output_model_repository: A directory contains all the optimal configurations that are experimented.
-    
-    plots: A directory consists of images of plots of different calculated parameters.
+reports: Summary and detailed HTML report of best 3 configurations of the model. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/report.md)
+
+checkpoints: Model Analyzer will save a checkpoint after all the perf analyzer runs for a given model are complete. More Info [here](https://github.ibm.com/zosdev/TIS-model_analyzer/blob/r24.07/docs/checkpoints.md)
+
+output_model_repository: A directory contains all the optimal configurations that are experimented.
+
+plots: A directory consists of images of plots of different calculated parameters.
 
 
 
