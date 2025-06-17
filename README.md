@@ -720,7 +720,7 @@ Triton Inference Server exposes some flags to control the execution mode of mode
 
 The PyTorch Backend also supports the config parameters available in the open-source Triton-Inference-Server pytorch_backend. Please refer to the customization guide [here](https://github.com/triton-inference-server/pytorch_backend?tab=readme-ov-file#customization)
 
-### PyTorch Backend: Extension to utilize Hugging Face models via checkpoints.
+### PyTorch Backend: Extension to utilize HuggingFace models via checkpoints.
 
 To leverage this feature, AI practitioners and personas has to extend the ibmz-accelerated-for-nvidia-triton-inference-server image by installing transformers via `pip3 install transformers==4.42.0`
 
@@ -886,7 +886,7 @@ Note: If the `tokenizer_instance_name` field is provided in the `config.pbtxt`, 
 
  - tokenizer_weights
 
-   The name of the tokenizer weights folder present in `weights_path`. For example, In case of hugging face deployments, if your model weights are present at `/model_repository/bert_base_cased_model/1/data/bert-base-cased` then your `weights_path` will be  `/model_repository/bert_base_cased_model/1/data/` and `tokenizer_weights` will be `bert-base-cased`. As in this case, the same folder (`bert-base-cased`) contains both model and tokenizer weights.    
+   The name of the tokenizer weights folder present in `weights_path`. For example, In case of HuggingFace deployments, if your model weights are present at `/model_repository/bert_base_cased_model/1/data/bert-base-cased` then your `weights_path` will be  `/model_repository/bert_base_cased_model/1/data/` and `tokenizer_weights` will be `bert-base-cased`. As in this case, the same folder (`bert-base-cased`) contains both model and tokenizer weights.    
  
      ```
      parameters {
