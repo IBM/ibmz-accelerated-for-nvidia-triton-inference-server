@@ -722,7 +722,7 @@ The PyTorch Backend also supports the config parameters available in the open-so
 
 ### PyTorch Backend: Extension to utilize HuggingFace models via checkpoints.
 
-To leverage this feature, AI practitioners and personas has to extend the ibmz-accelerated-for-nvidia-triton-inference-server image by installing transformers via `pip3 install transformers==4.42.0`
+To leverage this feature, AI practitioners and personas has to extend the ibmz-accelerated-for-nvidia-triton-inference-server image by installing transformers via `pip3 install transformers==4.51.1`
 
 This enables the deployment of the model classes available in the `transformers` library ( such as `BertModel`, `RobertaModel` ) with just trained weights. 
 
@@ -1543,6 +1543,10 @@ model. The default is the higher version of a model.
 4. Consumer of Triton server may or may not face an issue while having model with
    version -1 or model.py isn't present for python backend. For more details, see
    [link](https://github.com/triton-inference-server/server/issues/7052)
+
+5. Deploying Hugging Face models using zero-filled inference inputs with sequence
+   lengths ≥ 64 result in NaN outputs when running on NNPA hardware optimization.
+   For more details, see [link](https://github.com/onnx/onnx-mlir/issues/3347)
        
 
 # Versions and Release cadence <a id="versioning"></a>
@@ -1636,7 +1640,7 @@ Information regarding technical support can be found
 
 The International License Agreement for Non-Warranted Programs (ILAN) agreement
 can be found
-[here](https://www.ibm.com/support/customer/csol/terms/?id=L-WWCM-BZEKNH&lc=en) 
+[here](https://www.ibm.com/support/customer/csol/terms/?id=L-JXNY-4LLR96&lc=en) 
 
 The registered trademark Linux® is used pursuant to a sublicense from the Linux
 Foundation, the exclusive licensee of Linus Torvalds, owner of the mark on a
