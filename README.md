@@ -411,8 +411,6 @@ Key points:
 - Import `shap` and `lime` inside `initialize()`, not at module level. A missing package logs a warning and falls back to zero-filled output rather than preventing the model from loading.
 - The `predict_fn` must accept a 2-D numpy array `[n_samples, n_features]` and return a 1-D array of scores.
 - The inference batch is used as the background dataset for both SHAP and LIME, so no separate training dataset needs to be bundled with the model.
-- Per-sample LIME failures are caught inside the per-sample loop; the affected row remains zero while the rest of the batch continues.
-- Attribution tensors must be `TYPE_FP64` (`float64`) to match the convention used by the C++ backends.
 
 ## ONNX-MLIR Backend <a id="onnx-mlir-backend"></a>
 
@@ -477,10 +475,6 @@ When `COMPUTE_SHAP` or `COMPUTE_LIME` is set to `"true"` in `config.pbtxt`, the 
 3. Writes the resulting `float64` attribution arrays into additional output tensors alongside the primary model output.
 
 Explanations are computed **synchronously** on the same inference path as the primary prediction. If SHAP or LIME computation fails, the backend logs a warning, zero-fills the attribution output tensor, and still returns the primary prediction. The request is **not** failed.
-
-**Algorithm details:**
-- **SHAP**: Coalition-based attribution with full enumeration for ≤ 12 features; randomised paired-complement sampling up to 4096 coalitions for larger feature spaces. The background/reference baseline is the current inference batch itself (N > 1) or a zero-vector (N = 1).
-- **LIME**: Local linear surrogate model. Perturbs each input sample with Gaussian noise and fits a weighted linear model. Default: 256 perturbation samples. The perturbation set is data-dependent but reproducible for the same input.
 
 #### XAI output tensor registration
 
@@ -560,40 +554,9 @@ parameters {
 
 Clients request XAI tensors by name in the `outputs` block of the inference request. Omitting an XAI tensor name from `outputs` causes Triton to omit that tensor from the response, which reduces transfer overhead when only the primary prediction is needed.
 
-#### Inference request example
+#### Notes
 
-```bash
-curl -X POST http://localhost:8000/v2/models/my_onnxmlir_model/infer \
-  -H "Content-Type: application/json" \
-  -d '{
-    "inputs": [
-      {
-        "name": "IN0",
-        "shape": [1, 30],
-        "datatype": "FP32",
-        "data": [[0.1, 0.2, 0.3, 0.4, 0.5,
-                  0.6, 0.7, 0.8, 0.9, 1.0,
-                  1.1, 1.2, 1.3, 1.4, 1.5,
-                  1.6, 1.7, 1.8, 1.9, 2.0,
-                  2.1, 2.2, 2.3, 2.4, 2.5,
-                  2.6, 2.7, 2.8, 2.9, 3.0]]
-      }
-    ],
-    "outputs": [
-      {"name": "OUT0"},
-      {"name": "shap_values"}
-    ]
-  }'
-```
-
-The response will include both the primary model output and the `shap_values` tensor with shape `[1, 30]`.
-
-#### Limitations
-
-- Only the first input tensor is used as the explainability input. Models with multiple inputs are inferred normally, but explanations are computed against the first input only.
 - Input must have data type `TYPE_FP32`. Other input types are not supported for XAI.
-- SHAP and LIME are computed over the **flattened** feature space of the first input. Spatial structure (e.g. HWC layout for images) is not preserved.
-- Classification output format is assumed to have at least 2 output values per sample. For such models the backend reports the positive-class (index 1) prediction for the SHAP/LIME perturbation loop. For regression (1 output value), the single output is used.
 - There is no background/reference dataset cache. Each inference request uses the current batch as its own background. Single-sample batches (N=1) fall back to a zero-vector reference, which may reduce SHAP accuracy.
 
 
@@ -765,16 +728,6 @@ When `COMPUTE_SHAP` or `COMPUTE_LIME` is set to `"true"` in `config.pbtxt`:
 
 Explanations are computed **synchronously** on the same inference path. If SHAP or LIME computation fails, the backend logs a warning, zero-fills the attribution output tensor, and still returns the primary prediction. The request is **not** failed.
 
-**SHAP algorithm details:**
-- For `pmml`, `xgb_json`, and `lightgbm` model formats: exact tree-path attribution is used. The model's tree structure is parsed at load time and the path-dependent algorithm is applied per input row.
-- For other model formats (e.g. `onnx`) or when tree parsing fails: a coalition-based marginal masking fallback is used. Coalitions are fully enumerated for ≤ 12 features; for larger feature spaces, a randomised paired-complement sampling schedule of up to 4096 coalitions is used.
-- When batch size N > 1, the batch itself serves as the background/reference baseline for the marginal fallback. When N = 1, a zero-vector is used as the reference.
-
-**LIME algorithm details:**
-- Kernel-weighted linear surrogate model.
-- Default: 1000 perturbation samples, kernel width 0.75. These parameters are internal defaults and are not currently configurable via `config.pbtxt`.
-- Absent features are replaced using marginal sampling over the background batch.
-
 If a preprocessing pipeline (`PREPROCESSING_FILE`) is configured, the **preprocessed** feature matrix (post-transform) is passed to both SHAP and LIME. The attribution values therefore correspond to the preprocessed feature space, not the raw input space.
 
 #### XAI output tensor registration
@@ -863,41 +816,6 @@ parameters {
 }
 ```
 
-#### Inference request example
-
-```bash
-curl -X POST http://localhost:8000/v2/models/my_snapml_model/infer \
-  -H "Content-Type: application/json" \
-  -d '{
-    "inputs": [
-      {
-        "name": "IN0",
-        "shape": [2, 30],
-        "datatype": "FP32",
-        "data": [[0.1, 0.2, 0.3, 0.4, 0.5,
-                  0.6, 0.7, 0.8, 0.9, 1.0,
-                  1.1, 1.2, 1.3, 1.4, 1.5,
-                  1.6, 1.7, 1.8, 1.9, 2.0,
-                  2.1, 2.2, 2.3, 2.4, 2.5,
-                  2.6, 2.7, 2.8, 2.9, 3.0],
-                 [0.5, 0.5, 0.5, 0.5, 0.5,
-                  0.5, 0.5, 0.5, 0.5, 0.5,
-                  0.5, 0.5, 0.5, 0.5, 0.5,
-                  0.5, 0.5, 0.5, 0.5, 0.5,
-                  0.5, 0.5, 0.5, 0.5, 0.5,
-                  0.5, 0.5, 0.5, 0.5, 0.5]]
-      }
-    ],
-    "outputs": [
-      {"name": "OUT0"},
-      {"name": "shap_values"},
-      {"name": "lime_values"}
-    ]
-  }'
-```
-
-The response includes `OUT0` (shape `[2, 1]`), `shap_values` (shape `[2, 30]`), and `lime_values` (shape `[2, 30]`), all with `TYPE_FP64`.
-
 #### Supported model formats for XAI
 
 | Format | `MODEL_FILE_FORMAT` value | Model file | SHAP algorithm |
@@ -907,9 +825,8 @@ The response includes `OUT0` (shape `[2, 1]`), `shap_values` (shape `[2, 30]`), 
 | LightGBM text | `lightgbm` | `model.txt` | Exact tree-path attribution |
 | ONNX | `onnx` | `model.onnx` | Coalition-based marginal fallback (no tree parsing) |
 
-#### Limitations
+#### Notes
 
-- XAI requires at least one input tensor to be declared. If no input tensors are defined, model loading fails.
 - SHAP and LIME are computed on the **preprocessed** feature space when `PREPROCESSING_FILE` is set. Attributions do not directly correspond to the raw input features in that case.
 - There is no background/reference dataset cache between requests. Each request batch serves as its own background.
 - The `LIME_OUTPUT_TENSOR_NAME` and `SHAP_OUTPUT_TENSOR_NAME` parameters must not match any primary output tensor name already declared in `config.pbtxt`.
@@ -1354,21 +1271,6 @@ When `COMPUTE_SHAP` or `COMPUTE_LIME` is set to `"true"` in `config.pbtxt`, for 
 
 Explanations are computed **synchronously** per inference request.
 
-**Failure handling:** A SHAP computation failure causes the whole Triton request to fail with an error. Per-sample LIME failures are caught and logged; the affected sample's attribution row is left at zero while the rest of the batch continues. Other skip conditions — such as a non-tensor model output or an input that cannot be reshaped to a 2-D feature matrix — also cause the request to fail because the response tensor count would no longer match the declared outputs in `config.pbtxt`.
-
-**SHAP algorithm details:**
-- Background: the current batch itself (N > 1), or a zero-vector of the same feature count (N = 1). The explainer uses `nsamples="auto"`.
-- The target class is fixed to the argmax of the first sample's primary output. All batch rows are explained against the same class.
-
-**LIME algorithm details:**
-- `lime.lime_tabular.LimeTabularExplainer` in `"regression"` mode with `discretize_continuous=False` and `sample_around_instance=True`.
-- Background: 500 uniform samples from each feature's `[min, max]` range observed in the current batch. For constant features, the range is expanded to `[min, min + 1.0]`.
-- Number of LIME perturbation samples: `max(250, 2 * n_features + 1)`.
-- Fixed random seed (42) for both the background sampling and the `LimeTabularExplainer` instance, making the perturbation set reproducible for the same input.
-- Attribution values come from `exp.local_exp`, key `1` (class index 1 in regression mode) falling back to key `0`.
-
-The first input tensor (index 0 in `config.pbtxt`) is used as the explainability input. It is flattened to `[batch, n_features]` before being passed to the XAI methods.
-
 #### XAI output tensors must be declared in config.pbtxt
 
 Unlike the C++ backends, the PyTorch backend does **not** auto-register XAI output tensors. You must declare them explicitly in `config.pbtxt`. The backend matches declared output tensor names against the configured XAI names to determine which output slots to fill with attribution arrays.
@@ -1453,43 +1355,13 @@ parameters {
 }
 ```
 
-#### Inference request example
-
-```bash
-curl -X POST http://localhost:8000/v2/models/my_pytorch_model/infer \
-  -H "Content-Type: application/json" \
-  -d '{
-    "inputs": [
-      {
-        "name": "IN0",
-        "shape": [1, 30],
-        "datatype": "FP32",
-        "data": [[0.1, 0.2, 0.3, 0.4, 0.5,
-                  0.6, 0.7, 0.8, 0.9, 1.0,
-                  1.1, 1.2, 1.3, 1.4, 1.5,
-                  1.6, 1.7, 1.8, 1.9, 2.0,
-                  2.1, 2.2, 2.3, 2.4, 2.5,
-                  2.6, 2.7, 2.8, 2.9, 3.0]]
-      }
-    ],
-    "outputs": [
-      {"name": "OUT0"},
-      {"name": "shap_values"},
-      {"name": "lime_values"}
-    ]
-  }'
-```
-
-The response includes `OUT0` (the primary model prediction), `shap_values` (shape `[1, 30]`, `TYPE_FP64`), and `lime_values` (shape `[1, 30]`, `TYPE_FP64`).
-
 #### XAI output tensor ordering
 
 XAI output tensors can appear at any position in `config.pbtxt`'s `output` list. The backend uses the declared name to identify them, not their position. The final response tensor list matches the `config.pbtxt` order exactly, with primary model outputs and XAI arrays merged accordingly.
 
-#### Limitations
+#### Notes
 
 - Only numeric input types are supported. If the first input tensor has data type `TYPE_STRING`, both XAI flags are cleared before inference. Because the declared XAI output slots are never filled, the response tensor count would not match `config.pbtxt` and the request fails. Do not set `COMPUTE_SHAP` or `COMPUTE_LIME` for models whose first input is `TYPE_STRING`.
-- Only the first input tensor (index 0) is used for XAI perturbations. Multi-input models have all inputs forwarded to the model normally, but only `inputs[0]` is perturbed for attribution.
 - For batched inference, the batch is gathered before XAI computation. SHAP uses the full batch as the background dataset; the target class is fixed to the argmax of the **first** sample in the batch.
 - XAI is not supported for HuggingFace models with tokenized string inputs (`tokenizer_instance_name` set and `TYPE_STRING` inputs).
 - `shap` and `lime` must be pre-installed. The model load fails with a clear error if either package is missing.
@@ -1631,6 +1503,7 @@ plots: A directory consists of images of plots of different calculated parameter
 - [Traces](#tis-traces-restapi)
 - [Statistics](#tis-statistics-restapi)
 - [Server Metadata](#tis-server-metadata-restapi)
+- [MLflow APIs](#tis-mlflow-restapi)
 
 ## Model Management <a id="tis-model-mgmt-restapi"></a>
 
@@ -1783,9 +1656,22 @@ For more details about the statistics API calls please visit the kserve
 documentation website link
 [here](https://github.com/kserve/kserve/blob/master/docs/predict-api/v2/required_api.md#server-metadata-response-json-object)
 
+## MLflow APIs <a id="tis-mlflow-restapi"></a>
+
+IBM Z Accelerated for NVIDIA Triton Inference Server exposes two custom HTTP endpoints. These endpoints are registered by the Triton HTTP server's C++ layer and are available whenever the `mlflow_model` adapter is loaded.
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/v2/mlflow_deploy` | `POST` | Model deployment lifecycle — create, update, delete, list, get, predict |
+| `/v2/mlflow_monitor` | `POST` | Inference statistics monitoring — start, stop, list watchers |
+
+Both endpoints accept a JSON body with an `"operation"` field and return a plain JSON response (the KServe v2 envelope is stripped by the HTTP layer). They are available on the same HTTP port as the standard Triton inference endpoint (default `8000`).
+
+For full request/response schemas, supported operations, and usage examples, see the [MLflow Integration](#mlflow-integration) section.
+
 # MLflow Integration <a id="mlflow-integration"></a>
 
-IBM Z Accelerated for NVIDIA Triton Inference Server includes an MLflow integration layer that enables model deployment lifecycle management and inference statistics monitoring through the MLflow Python SDK and CLI. The integration does not replace Triton's native inference path — all model inference is performed by Triton through its standard `/v2/models/<name>/infer` endpoint.
+IBM Z Accelerated for NVIDIA Triton Inference Server includes an MLflow integration that enables model deployment lifecycle management and inference statistics monitoring through custom HTTP APIs.
 
 ## Architecture Overview
 
@@ -1815,7 +1701,7 @@ The adapter models use a shared `config.pbtxt` with a single `MLFLOW_REQUEST` in
 
 - The container image must include the `mlflow-triton` plugin package and the `mlflow` server binary.
 - Triton must be started with `--model-control-mode=explicit` so that `load_model` / `unload_model` API calls work.
-- The `mlflow_model` adapter directory (with `config.pbtxt`, `1/model.py`, `2/model.py`) must be present in one of the model repositories and loaded at startup via `--load-model=mlflow_model`.
+- The `mlflow_model` adapter is always located at `/mlflow/models` inside the container. It is loaded at startup via `--load-model=mlflow_model` using `--model-repository=/mlflow/models`. Do not place it in the user model repository (`/models`).
 - `/mlflow` inside the container is used by the MLflow tracking server for its SQLite database and artifact storage. Mount a host directory there to persist data across container restarts.
 - `TRITON_MODEL_REPO` must point to the user model repository (the directory where deployed models are written). This is the second `--model-repository` path, not the MLflow-internal one.
 
@@ -2074,19 +1960,6 @@ The predict operation forwards the request to the deployed model's standard Trit
 - KServe v2 format: `{"inputs": [{"name":..., "shape":..., "datatype":..., "data":...}]}`
 - Plain dict format: `{"IN0": [1.0, 2.0, ...]}` (values converted to `np.ndarray` automatically)
 
-### Model URI formats
-
-The `create` and `update` operations accept the following `model_uri` formats:
-
-| Format | Example |
-|--------|---------|
-| Version number | `models:/my_model/1` |
-| MLflow stage | `models:/my_model/Production` |
-| Alias (new-style) | `models:/my_model@champion` |
-| Alias (path-style) | `models:/my_model/champion` |
-
-Aliases and stages are resolved to an integer version number before artifact download.
-
 ## Monitoring API
 
 Monitoring operations are sent to `POST /v2/mlflow_monitor`.
@@ -2160,7 +2033,6 @@ Each interval, the worker: fetches current stats, computes deltas vs. the previo
 | `interval` | `number` | `60` | Flush interval in seconds for watch mode. Must be > 0. |
 | `tracking_uri` | `string` | `$MLFLOW_TRACKING_URI` | Override the MLflow tracking URI for this request. |
 | `triton_url` | `string` | `$TRITON_URL` | Override the Triton URL for this request. |
-| `step` | `int` | `0` | MLflow step number for single-run mode. |
 
 #### `stop`
 
@@ -2211,26 +2083,26 @@ Response:
 
 ### Monitored metrics
 
-The following metrics are logged to MLflow by each flush window. They are sourced from the Triton `/v2/models/stats` endpoint (`inference_stats` fields) and aggregated across all matched models (or the single named model).
+The following metrics are logged to MLflow by each flush window, aggregated across all matched models (or the single named model).
 
-| MLflow metric name | Unit | Source field | Description |
-|--------------------|------|-------------|-------------|
-| `inference_count` | count | `inference_count` | Total inference requests in the window. |
-| `error_count` | count | `fail.count` | Failed inference requests in the window. |
-| `inference_latency_mean` | ms | `success.ns / success.count` | Mean end-to-end inference latency (successful requests only). |
-| `queue_latency_mean_ms` | ms | `queue.ns / success.count` | Mean time spent in the Triton request queue. |
-| `compute_latency_mean_ms` | ms | `compute_infer.ns / success.count` | Mean time spent in the compute kernel. |
+| MLflow metric name | Unit | Description |
+|--------------------|------|-------------|
+| `inference_count` | count | Total inference requests in the window. |
+| `error_count` | count | Failed inference requests in the window. |
+| `inference_latency_mean` | ms | Mean end-to-end inference latency (successful requests only). |
+| `queue_latency_mean_ms` | ms | Mean time spent in the request queue. |
+| `compute_latency_mean_ms` | ms | Mean time spent in the compute kernel. |
 
-The latency metrics are only logged when at least one successful inference occurred in the window (`success_count > 0`). All values represent **deltas** within the current flush window, not cumulative totals.
+Latency metrics are only logged when at least one successful inference occurred in the window. All values represent **deltas** within the current flush window, not cumulative totals.
 
-**Note:** Input drift and prediction drift monitoring are not implemented. The monitor collects Triton inference statistics only. Drift detection requires a separate external pipeline.
+**Note:** Input drift and prediction drift monitoring are not implemented.
 
 ### Background watcher lifecycle
 
 - Each background watcher is identified by its `experiment_name`. Only one watcher per experiment name can be active at a time.
-- Watchers run as daemon threads inside the `mlflow_model/2` Python process. They do **not** persist across Triton server restarts.
-- If the MLflow tracking server is temporarily unavailable, the `log_metrics` call fails with an `[ERROR]` log message and the metrics for that window are lost. The watcher continues running.
-- If the Triton stats endpoint is unreachable, the watcher logs a warning and skips the current window. The watcher continues running.
+- Watchers do **not** persist across Triton server restarts.
+- If the MLflow tracking server is temporarily unavailable, the metrics for that window are lost and a warning is logged. The watcher continues running.
+- If the Triton stats endpoint is unreachable, the watcher skips the current window and continues running.
 
 ## Troubleshooting
 
@@ -2244,35 +2116,6 @@ The latency metrics are only logged when at least one successful inference occur
 | `experiment_name is required` | Missing field in JSON body | Add `"experiment_name"` to monitor request |
 | `[monitor] ERROR: log_metrics failed` | MLflow tracking server unavailable | Start `mlflow server`, check `MLFLOW_TRACKING_URI` |
 | `model_uri is required for update_deployment` | Missing `model_uri` | Pass `"model_uri"` in the update request |
-
-## Python SDK usage
-
-The MLflow deployment client can also be used directly from Python:
-
-```python
-from mlflow.deployments import get_deploy_client
-import os
-
-os.environ["TRITON_MODEL_REPO"] = "/models"
-os.environ["TRITON_URL"] = "http://localhost:8000"
-
-client = get_deploy_client("triton")
-
-# Create
-client.create_deployment("my_lgbm_model", "models:/my_lgbm_model/1")
-
-# List
-deployments = client.list_deployments()
-
-# Get
-info = client.get_deployment("my_lgbm_model")
-
-# Update
-client.update_deployment("my_lgbm_model", model_uri="models:/my_lgbm_model/2")
-
-# Delete
-client.delete_deployment("my_lgbm_model")
-```
 
 # Model Validation <a id="model-validation"></a>
 
