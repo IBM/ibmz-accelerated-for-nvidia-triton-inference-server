@@ -187,26 +187,145 @@ For security and deployment best practices, please visit the common AI Toolkit d
 
 ## Triton Inference Server using HTTPS/Secure gRPC
 
-Configuring Triton Inference Server for HTTPS and gRPC Secure ensures secure and
-encrypted communication channels, protecting clients and server data
+Configuring Triton Inference Server and integrated services (such as MLflow) for HTTPS and gRPC Secure ensures secure and
+encrypted communication channels, protecting client and server data
 confidentiality, integrity, and authenticity.
 
 ### HTTPS
 
 HTTPS (Hypertext Transfer Protocol Secure) is a secure version of the HTTP
-protocol used for communication between clients (such as web browsers) and
-servers over the internet. It provides encryption and secure data transmission
+protocol used for communication between clients (such as web browsers and Python applications) and
+servers over the network. It provides encryption and secure data transmission
 by using SSL/TLS (Secure Sockets Layer/Transport Layer Security) protocols.
 
-Reverse proxy servers can help secure Triton Inference Server communications
-with HTTPS by protecting backend servers and enabling secure communication and
-performance required to handle incoming request well.
+Reverse proxy servers (such as Nginx) help secure Triton Inference Server communications
+with HTTPS by terminating TLS in front of backend servers and enabling secure, encrypted communication.
 
 The HTTPS protocol ensures that the data exchanged between the client and server
-is encrypted and protected from eavesdropping or tampering. By configuring
+is encrypted and protected from eavesdropping or tampering. By configuring a
 reverse proxy server with HTTPS, you enable secure communication between the
-Triton Inference Server and clients, ensuring data confidentiality and
-integrity.
+Triton Inference Server, the MLflow Tracking Server, and clients.
+
+### Secure HTTPS Integration for Triton and MLflow
+
+When running Triton Inference Server alongside the MLflow Tracking Server, both services can be secured behind an Nginx reverse proxy using SSL/TLS certificates.
+
+```
++---------------------------+              +------------------------------+              +--------------------------+
+|  Client (Python / cURL)   | === HTTPS => |  Nginx Reverse Proxy         | === HTTP ==> | Triton Server (Port 8000)|
+|                           |  (Port 443)  |  (/etc/nginx/cert.crt & key) | (plaintext)  | (Inference & Deploy APIs)|
+|                           |              |                              |              +--------------------------+
+|                           | === HTTPS => |                              | === HTTP ==> | MLflow Server (Port 5000)|
+|                           |  (Port 5443) |                              | (plaintext)  | (Tracking & Registry)    |
++---------------------------+              +------------------------------+              +--------------------------+
+```
+
+#### 1. Nginx Reverse Proxy Configuration
+
+Configure Nginx (`/etc/nginx/conf.d/secure_http.conf` or `/etc/nginx/sites-available/default`) to expose dedicated SSL ports for Triton and MLflow:
+
+```nginx
+# Triton HTTPS Reverse Proxy (Port 443 -> 8000)
+server {
+    listen 443 ssl;
+    server_name localhost;
+
+    ssl_certificate     /etc/nginx/cert.crt;
+    ssl_certificate_key /etc/nginx/cert.key;
+
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+    }
+}
+
+# MLflow HTTPS Reverse Proxy (Port 5443 -> 5000)
+server {
+    listen 5443 ssl;
+    server_name localhost;
+
+    ssl_certificate     /etc/nginx/cert.crt;
+    ssl_certificate_key /etc/nginx/cert.key;
+
+    location / {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+    }
+}
+```
+
+#### 2. SSL/TLS Certificate Generation
+
+Generate self-signed or CA-signed certificates using `openssl`:
+
+```bash
+# 1. Generate Root CA
+openssl genrsa -passout pass:1234 -des3 -out ca.key 4096
+openssl req -passin pass:1234 -new -x509 -days 365 -key ca.key -out ca.crt -subj "/C=US/ST=NY/O=IBM/CN=Root CA"
+
+# 2. Generate Server Certificate signed by CA
+openssl genrsa -passout pass:1234 -des3 -out server.key 4096
+openssl req -passin pass:1234 -new -key server.key -out server.csr -subj "/C=US/ST=NY/O=IBM/CN=localhost"
+openssl x509 -req -passin pass:1234 -days 365 -in server.csr -CA ca.crt -CAkey ca.key -set_serial 01 -out server.crt
+openssl rsa -passin pass:1234 -in server.key -out server.key
+
+# 3. Copy to Nginx Certificate Path
+cp server.crt /etc/nginx/cert.crt
+cp server.key /etc/nginx/cert.key
+```
+
+#### 3. Client Environment Variables & Usage
+
+Configure client applications to target the HTTPS endpoints and supply the CA certificate for peer verification:
+
+```bash
+# Target secure endpoints
+export TRITON_URL="https://localhost:443"
+export MLFLOW_TRACKING_URI="https://localhost:5443"
+
+# CA Certificate for SSL verification
+export SSL_CA_CERT="/path/to/ca.crt"
+export MLFLOW_TRACKING_SERVER_CERT_PATH="/path/to/ca.crt"
+export REQUESTS_CA_BUNDLE="/path/to/ca.crt"
+```
+
+#### 4. Python Client Code Sample
+
+```python
+import os
+import requests
+import mlflow
+
+TRITON_URL = os.environ.get("TRITON_URL", "https://localhost:443")
+MLFLOW_URI = os.environ.get("MLFLOW_TRACKING_URI", "https://localhost:5443")
+CA_CERT = os.environ.get("SSL_CA_CERT", "/path/to/ca.crt")
+
+# Configure MLflow Tracking with SSL
+mlflow.set_tracking_uri(MLFLOW_URI)
+
+# Configure Triton HTTP session with SSL verification
+session = requests.Session()
+session.verify = CA_CERT
+session.headers["Accept-Encoding"] = "identity"
+
+# Deploy model via Triton MLflow Deploy API over HTTPS
+deploy_payload = {
+    "operation": "create",
+    "model_name": "my_model",
+    "model_uri": "models:/my_model@champion"
+}
+resp = session.post(f"{TRITON_URL}/v2/mlflow_deploy", json=deploy_payload)
+print(f"Deploy status: {resp.status_code}, response: {resp.json()}")
+
+# Perform inference over HTTPS
+infer_payload = {
+    "inputs": [
+        {"name": "INPUT0", "shape": [4], "datatype": "FP32", "data": [1.0, 2.0, 3.0, 4.0]}
+    ]
+}
+infer_resp = session.post(f"{TRITON_URL}/v2/models/my_model/infer", json=infer_payload)
+print(f"Inference result: {infer_resp.json()}")
+```
 
 ### Secure gRPC
 
