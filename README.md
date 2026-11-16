@@ -327,6 +327,14 @@ infer_resp = session.post(f"{TRITON_URL}/v2/models/my_model/infer", json=infer_p
 print(f"Inference result: {infer_resp.json()}")
 ```
 
+#### 5. Access the MLflow Dashboard over HTTPS
+
+Open `https://<host>:5443` in a browser (for example, `https://localhost:5443`), not `http://<host>:5000`.
+
+- A self-signed or private-CA certificate triggers a browser warning. Import `ca.crt` into the browser or OS trust store, or accept the warning.
+- Verify from the CLI: `curl --cacert /path/to/ca.crt https://localhost:5443/health` (expects `OK`).
+
+
 ### Secure gRPC
 
 Triton Inference Server supports the gRPC protocol, which is a high-performance.
