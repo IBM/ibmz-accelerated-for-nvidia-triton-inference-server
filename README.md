@@ -208,31 +208,55 @@ Triton Inference Server, the MLflow Tracking Server, and clients.
 
 ### Secure HTTPS Integration for Triton and MLflow
 
-When running Triton Inference Server alongside the MLflow Tracking Server, both services can be secured behind an Nginx reverse proxy using SSL/TLS certificates.
+When running Triton Inference Server alongside the MLflow Tracking Server in the same container, both services can be secured by running an Nginx reverse proxy inside the Triton container. Nginx using a self-signed certificate and forwards plaintext HTTP to the Triton and MLflow processes over the container's interface.
 
 ```
-+---------------------------+              +------------------------------+              +--------------------------+
-|  Client (Python / cURL)   | === HTTPS => |  Nginx Reverse Proxy         | === HTTP ==> | Triton Server (Port 8000)|
-|                           |  (Port 443)  |  (/etc/nginx/cert.crt & key) | (plaintext)  | (Inference & Deploy APIs)|
-|                           |              |                              |              +--------------------------+
-|                           | === HTTPS => |                              | === HTTP ==> | MLflow Server (Port 5000)|
-|                           |  (Port 5443) |                              | (plaintext)  | (Tracking & Registry)    |
-+---------------------------+              +------------------------------+              +--------------------------+
+                                       Triton container (triton_mlflow)
+                               +----------------------------------------------------+
++---------------------------+  |  +------------------------+      +--------------+  |
+|  Client (Python / cURL)   |  |  | Nginx Reverse Proxy    | HTTP | Triton       |  |
+|                           |==HTTPS=> Container port 443   |=====>| Port 8000    |  |
+|                           |  |  | (host port 443)       |      | (Inference & |  |
+|                           |  |  |                        |      |  Deploy APIs)|  |
+|                           |  |  |                        |      +--------------+  |
+|                           |  |  |                        |                        |
+|                           |==HTTPS=> Container port 5443  | HTTP +--------------+  |
+|                           |  |  | (host port 5443)       |=====>| MLflow       |  |
++---------------------------+  |  |                        |      | Port 5000    |  |
+                               |  | /etc/nginx/ssl/        |      | (Tracking &  |  |
+                               |  |   cert.crt, cert.key   |      |  Registry)   |  |
+                               |  +------------------------+      +--------------+  |
+                               +----------------------------------------------------+
 ```
 
-#### 1. Nginx Reverse Proxy Configuration
+> **Note:** Nginx listens on container ports `443` (Triton) and `5443` (MLflow). The examples in this section publish them as host ports `443` (`-p 443:443`) and `5443` (`-p 5443:5443`). Container ports can only be published when the container is created, so add these `-p` options to the `podman run` command used to start the `triton_mlflow` container (see [Single-container startup](#single-container-startup-recommended)).
 
-Configure Nginx (`/etc/nginx/conf.d/secure_http.conf` or `/etc/nginx/sites-available/default`) to expose dedicated SSL ports for Triton and MLflow:
+#### Server Side
+
+##### 1. Create the SSL certificate and Nginx configuration outside the container
+
+Create a self-signed SSL certificate. The `subjectAltName` entries allow clients to connect using either `localhost` or `127.0.0.1`:
+
+```bash
+openssl req -x509 -nodes -days 365 \
+  -newkey rsa:2048 \
+  -keyout cert.key \
+  -out cert.crt \
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+```
+
+> **Note:** TLS clients validate the server name against the certificate's `subjectAltName`. If clients connect using a different host name or IP address, add it to the `subjectAltName` list (for example, `DNS:localhost,IP:127.0.0.1,DNS:<server-hostname>`).
+
+Create `triton.conf` in the same directory to expose dedicated SSL ports for Triton and MLflow:
 
 ```nginx
 # Triton HTTPS Reverse Proxy (Port 443 -> 8000)
 server {
     listen 443 ssl;
     server_name localhost;
-
-    ssl_certificate     /etc/nginx/cert.crt;
-    ssl_certificate_key /etc/nginx/cert.key;
-
+    ssl_certificate     /etc/nginx/ssl/cert.crt;
+    ssl_certificate_key /etc/nginx/ssl/cert.key;
     location / {
         proxy_pass http://localhost:8000;
         proxy_http_version 1.1;
@@ -243,10 +267,8 @@ server {
 server {
     listen 5443 ssl;
     server_name localhost;
-
-    ssl_certificate     /etc/nginx/cert.crt;
-    ssl_certificate_key /etc/nginx/cert.key;
-
+    ssl_certificate     /etc/nginx/ssl/cert.crt;
+    ssl_certificate_key /etc/nginx/ssl/cert.key;
     location / {
         proxy_pass http://localhost:5000;
         proxy_http_version 1.1;
@@ -254,40 +276,84 @@ server {
 }
 ```
 
-#### 2. SSL/TLS Certificate Generation
+The `ssl_certificate` and `ssl_certificate_key` paths refer to locations **inside the container**. The files are copied there in the next step.
 
-Generate self-signed or CA-signed certificates using `openssl`:
+##### 2. Copy the files into the running container
 
-```bash
-# 1. Generate Root CA
-openssl genrsa -passout pass:1234 -des3 -out ca.key 4096
-openssl req -passin pass:1234 -new -x509 -days 365 -key ca.key -out ca.crt -subj "/C=US/ST=NY/O=IBM/CN=Root CA"
-
-# 2. Generate Server Certificate signed by CA
-openssl genrsa -passout pass:1234 -des3 -out server.key 4096
-openssl req -passin pass:1234 -new -key server.key -out server.csr -subj "/C=US/ST=NY/O=IBM/CN=localhost"
-openssl x509 -req -passin pass:1234 -days 365 -in server.csr -CA ca.crt -CAkey ca.key -set_serial 01 -out server.crt
-openssl rsa -passin pass:1234 -in server.key -out server.key
-
-# 3. Copy to Nginx Certificate Path
-cp server.crt /etc/nginx/cert.crt
-cp server.key /etc/nginx/cert.key
-```
-
-#### 3. Client Environment Variables & Usage
-
-Configure client applications to target the HTTPS endpoints and supply the CA certificate for peer verification:
+Create the target directories:
 
 ```bash
-# Target secure endpoints
-export TRITON_URL="https://localhost:443"
-export MLFLOW_TRACKING_URI="https://localhost:5443"
-
-# CA Certificate for SSL verification
-export SSL_CA_CERT="/path/to/ca.crt"
-export MLFLOW_TRACKING_SERVER_CERT_PATH="/path/to/ca.crt"
-export REQUESTS_CA_BUNDLE="/path/to/ca.crt"
+podman exec -u 0 triton_mlflow mkdir -p /etc/nginx/ssl
+podman exec -u 0 triton_mlflow mkdir -p /etc/nginx/conf.d
 ```
+
+Copy the configuration and certificate files:
+
+```bash
+podman cp triton.conf triton_mlflow:/etc/nginx/conf.d/triton.conf
+podman cp cert.crt triton_mlflow:/etc/nginx/ssl/cert.crt
+podman cp cert.key triton_mlflow:/etc/nginx/ssl/cert.key
+```
+##### 3. Install Nginx inside the container
+
+```bash
+podman exec -u 0 triton_mlflow microdnf install -y nginx
+```
+
+##### 4. Start Nginx inside the container
+
+Validate the configuration:
+
+```bash
+podman exec -u 0 triton_mlflow nginx -t
+```
+
+Start Nginx:
+
+```bash
+podman exec -d -u 0 triton_mlflow nginx -g 'daemon off;'
+```
+
+> **Note:** Nginx is started as an additional process with `podman exec`, so it is not started automatically when the container restarts. Re-run this step after each container restart. Files copied with `podman cp` and packages installed with `microdnf` are lost if the container is removed and re-created.
+
+#### Client Side
+
+##### 1. Copy the certificate from the server
+
+Copy the same `cert.crt` that was installed on the server and use it as the trusted certificate on the client. Copy only `cert.crt`; never copy `cert.key` to clients.
+
+##### 2. Set the client environment variables
+
+```bash
+export REQUESTS_CA_BUNDLE="$HOME/triton-cert.crt"
+export SSL_CERT_FILE="$HOME/triton-cert.crt"
+export CURL_CA_BUNDLE="$HOME/triton-cert.crt"
+```
+
+##### 3. Verify the HTTPS connections to Triton and MLflow
+
+```bash
+python -c "
+import ssl, urllib.request
+ctx = ssl.create_default_context(cafile='$HOME/triton-cert.crt')
+endpoints = {
+    'Triton': 'https://127.0.0.1:443/v2/health/ready',
+    'MLflow': 'https://127.0.0.1:5443/health',
+}
+for name, url in endpoints.items():
+    r = urllib.request.urlopen(url, context=ctx)
+    print(f'{name} HTTPS SUCCESS:', r.status)
+"
+```
+
+Expected output:
+
+```
+Triton HTTPS SUCCESS: 200
+MLflow HTTPS SUCCESS: 200
+```
+
+> **Note:** Replace `127.0.0.1` with the server address if the client runs on a different machine, and make sure that address is listed in the certificate's `subjectAltName`.
 
 #### 4. Python Client Code Sample
 
