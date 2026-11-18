@@ -215,12 +215,12 @@ When running Triton Inference Server alongside the MLflow Tracking Server in the
                                +----------------------------------------------------+
 +---------------------------+  |  +------------------------+      +--------------+  |
 |  Client (Python / cURL)   |  |  | Nginx Reverse Proxy    | HTTP | Triton       |  |
-|                           |==HTTPS=> Container port 443   |=====>| Port 8000    |  |
-|                           |  |  | (host port 443)       |      | (Inference & |  |
+|                           |==HTTPS=> Container port 443  |=====>| Port 8000    |  |
+|                           |  |  | (host port 443)        |      | (Inference & |  |
 |                           |  |  |                        |      |  Deploy APIs)|  |
 |                           |  |  |                        |      +--------------+  |
 |                           |  |  |                        |                        |
-|                           |==HTTPS=> Container port 5443  | HTTP +--------------+  |
+|                           |==HTTPS=> Container port 5443 | HTTP +--------------+  |
 |                           |  |  | (host port 5443)       |=====>| MLflow       |  |
 +---------------------------+  |  |                        |      | Port 5000    |  |
                                |  | /etc/nginx/ssl/        |      | (Tracking &  |  |
