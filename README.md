@@ -12,6 +12,7 @@
 - [IBM Z Accelerated for NVIDIA Triton™ Inference Server Backends](#triton-server-backends)
 - [Triton Model Analyzer](#triton-model-analyzer)
 - [REST APIs](#triton-server-restapi)
+- [MLflow Integration](#mlflow-integration)
 - [Model Validation](#model-validation)
 - [Using the Code Samples](#code-samples)
 - [Additional Topics](#additional-topics)
@@ -153,11 +154,12 @@ IBM Z Accelerated for NVIDIA Triton™ Inference Server can be launched by
 running the following command.
 
 ```bash
-docker run --shm-size 1G --rm
-    -p <EXPOSE_HTTP_PORT_NUM>:8000
-    -p <EXPOSE_GRPC_PORT_NUM>:8001
-    -p <EXPOSE_Metrics_PORT_NUM>:8002
-    -v $PWD/models:/models <triton_inference_server_image> tritonserver
+docker run --shm-size 1G --rm \
+    -p <EXPOSE_HTTP_PORT_NUM>:8000 \
+    -p <EXPOSE_GRPC_PORT_NUM>:8001 \
+    -p <EXPOSE_Metrics_PORT_NUM>:8002 \
+    -v $PWD/models:/models \
+    <triton_inference_server_image> tritonserver \
     --model-repository=/models
 ```
 
@@ -185,26 +187,219 @@ For security and deployment best practices, please visit the common AI Toolkit d
 
 ## Triton Inference Server using HTTPS/Secure gRPC
 
-Configuring Triton Inference Server for HTTPS and gRPC Secure ensures secure and
-encrypted communication channels, protecting clients and server data
+Configuring Triton Inference Server and integrated services (such as MLflow) for HTTPS and gRPC Secure ensures secure and
+encrypted communication channels, protecting client and server data
 confidentiality, integrity, and authenticity.
 
 ### HTTPS
 
 HTTPS (Hypertext Transfer Protocol Secure) is a secure version of the HTTP
-protocol used for communication between clients (such as web browsers) and
-servers over the internet. It provides encryption and secure data transmission
+protocol used for communication between clients (such as web browsers and Python applications) and
+servers over the network. It provides encryption and secure data transmission
 by using SSL/TLS (Secure Sockets Layer/Transport Layer Security) protocols.
 
-Reverse proxy servers can help secure Triton Inference Server communications
-with HTTPS by protecting backend servers and enabling secure communication and
-performance required to handle incoming request well.
+Reverse proxy servers (such as Nginx) help secure Triton Inference Server communications
+with HTTPS by terminating TLS in front of backend servers and enabling secure, encrypted communication.
 
 The HTTPS protocol ensures that the data exchanged between the client and server
-is encrypted and protected from eavesdropping or tampering. By configuring
+is encrypted and protected from eavesdropping or tampering. By configuring a
 reverse proxy server with HTTPS, you enable secure communication between the
-Triton Inference Server and clients, ensuring data confidentiality and
-integrity.
+Triton Inference Server, the MLflow Tracking Server, and clients.
+
+### Secure HTTPS Integration for Triton and MLflow
+
+When running Triton Inference Server alongside the MLflow Tracking Server in the same container, both services can be secured by running an Nginx reverse proxy inside the Triton container. Nginx using a self-signed certificate and forwards plaintext HTTP to the Triton and MLflow processes over the container's interface.
+
+```
+                                       Triton container (triton_mlflow)
+                               +----------------------------------------------------+
++---------------------------+  |  +------------------------+      +--------------+  |
+|  Client (Python / cURL)   |  |  | Nginx Reverse Proxy    | HTTP | Triton       |  |
+|                           |==HTTPS=> Container port 443  |=====>| Port 8000    |  |
+|                           |  |  | (host port 443)        |      | (Inference & |  |
+|                           |  |  |                        |      |  Deploy APIs)|  |
+|                           |  |  |                        |      +--------------+  |
+|                           |  |  |                        |                        |
+|                           |==HTTPS=> Container port 5443 | HTTP +--------------+  |
+|                           |  |  | (host port 5443)       |=====>| MLflow       |  |
++---------------------------+  |  |                        |      | Port 5000    |  |
+                               |  | /etc/nginx/ssl/        |      | (Tracking &  |  |
+                               |  |   cert.crt, cert.key   |      |  Registry)   |  |
+                               |  +------------------------+      +--------------+  |
+                               +----------------------------------------------------+
+```
+
+> **Note:** Nginx listens on container ports `443` (Triton) and `5443` (MLflow). The examples in this section publish them as host ports `443` (`-p 443:443`) and `5443` (`-p 5443:5443`). Container ports can only be published when the container is created, so add these `-p` options to the `podman run` command used to start the `triton_mlflow` container (see [Single-container startup](#single-container-startup-recommended)).
+
+#### Server Side
+
+##### 1. Create the SSL certificate and Nginx configuration outside the container
+
+Create a self-signed SSL certificate. The `subjectAltName` entries allow clients to connect using either `localhost` or `127.0.0.1`:
+
+```bash
+openssl req -x509 -nodes -days 365 \
+  -newkey rsa:2048 \
+  -keyout cert.key \
+  -out cert.crt \
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+```
+
+> **Note:** TLS clients validate the server name against the certificate's `subjectAltName`. If clients connect using a different host name or IP address, add it to the `subjectAltName` list (for example, `DNS:localhost,IP:127.0.0.1,DNS:<server-hostname>`).
+
+Create `triton.conf` in the same directory to expose dedicated SSL ports for Triton and MLflow:
+
+```nginx
+# Triton HTTPS Reverse Proxy (Port 443 -> 8000)
+server {
+    listen 443 ssl;
+    server_name localhost;
+    ssl_certificate     /etc/nginx/ssl/cert.crt;
+    ssl_certificate_key /etc/nginx/ssl/cert.key;
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+    }
+}
+
+# MLflow HTTPS Reverse Proxy (Port 5443 -> 5000)
+server {
+    listen 5443 ssl;
+    server_name localhost;
+    ssl_certificate     /etc/nginx/ssl/cert.crt;
+    ssl_certificate_key /etc/nginx/ssl/cert.key;
+    location / {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+    }
+}
+```
+
+The `ssl_certificate` and `ssl_certificate_key` paths refer to locations **inside the container**. The files are copied there in the next step.
+
+##### 2. Copy the files into the running container
+
+Create the target directories:
+
+```bash
+podman exec -u 0 triton_mlflow mkdir -p /etc/nginx/ssl
+podman exec -u 0 triton_mlflow mkdir -p /etc/nginx/conf.d
+```
+
+Copy the configuration and certificate files:
+
+```bash
+podman cp triton.conf triton_mlflow:/etc/nginx/conf.d/triton.conf
+podman cp cert.crt triton_mlflow:/etc/nginx/ssl/cert.crt
+podman cp cert.key triton_mlflow:/etc/nginx/ssl/cert.key
+```
+##### 3. Install Nginx inside the container
+
+```bash
+podman exec -u 0 triton_mlflow microdnf install -y nginx
+```
+
+##### 4. Start Nginx inside the container
+
+Validate the configuration:
+
+```bash
+podman exec -u 0 triton_mlflow nginx -t
+```
+
+Start Nginx:
+
+```bash
+podman exec -d -u 0 triton_mlflow nginx -g 'daemon off;'
+```
+
+> **Note:** Nginx is started as an additional process with `podman exec`, so it is not started automatically when the container restarts. Re-run this step after each container restart. Files copied with `podman cp` and packages installed with `microdnf` are lost if the container is removed and re-created.
+
+#### Client Side
+
+##### 1. Copy the certificate from the server
+
+Copy the same `cert.crt` that was installed on the server and use it as the trusted certificate on the client. Copy only `cert.crt`; never copy `cert.key` to clients.
+
+##### 2. Set the client environment variables
+
+```bash
+export REQUESTS_CA_BUNDLE="$HOME/triton-cert.crt"
+export SSL_CERT_FILE="$HOME/triton-cert.crt"
+export CURL_CA_BUNDLE="$HOME/triton-cert.crt"
+```
+
+##### 3. Verify the HTTPS connections to Triton and MLflow
+
+```bash
+python -c "
+import ssl, urllib.request
+ctx = ssl.create_default_context(cafile='$HOME/triton-cert.crt')
+endpoints = {
+    'Triton': 'https://127.0.0.1:443/v2/health/ready',
+    'MLflow': 'https://127.0.0.1:5443/health',
+}
+for name, url in endpoints.items():
+    r = urllib.request.urlopen(url, context=ctx)
+    print(f'{name} HTTPS SUCCESS:', r.status)
+"
+```
+
+Expected output:
+
+```
+Triton HTTPS SUCCESS: 200
+MLflow HTTPS SUCCESS: 200
+```
+
+> **Note:** Replace `127.0.0.1` with the server address if the client runs on a different machine, and make sure that address is listed in the certificate's `subjectAltName`.
+
+#### 4. Python Client Code Sample
+
+```python
+import os
+import requests
+import mlflow
+
+TRITON_URL = os.environ.get("TRITON_URL", "https://localhost:443")
+MLFLOW_URI = os.environ.get("MLFLOW_TRACKING_URI", "https://localhost:5443")
+CA_CERT = os.environ.get("SSL_CA_CERT", "/path/to/ca.crt")
+
+# Configure MLflow Tracking with SSL
+mlflow.set_tracking_uri(MLFLOW_URI)
+
+# Configure Triton HTTP session with SSL verification
+session = requests.Session()
+session.verify = CA_CERT
+session.headers["Accept-Encoding"] = "identity"
+
+# Deploy model via Triton MLflow Deploy API over HTTPS
+deploy_payload = {
+    "operation": "create",
+    "model_name": "my_model",
+    "model_uri": "models:/my_model@champion"
+}
+resp = session.post(f"{TRITON_URL}/v2/mlflow_deploy", json=deploy_payload)
+print(f"Deploy status: {resp.status_code}, response: {resp.json()}")
+
+# Perform inference over HTTPS
+infer_payload = {
+    "inputs": [
+        {"name": "INPUT0", "shape": [4], "datatype": "FP32", "data": [1.0, 2.0, 3.0, 4.0]}
+    ]
+}
+infer_resp = session.post(f"{TRITON_URL}/v2/models/my_model/infer", json=infer_payload)
+print(f"Inference result: {infer_resp.json()}")
+```
+
+#### 5. Access the MLflow Dashboard over HTTPS
+
+Open `https://<host>:5443` in a browser (for example, `https://localhost:5443`), not `http://<host>:5000`.
+
+- A self-signed or private-CA certificate triggers a browser warning. Import `ca.crt` into the browser or OS trust store, or accept the warning.
+- Verify from the CLI: `curl --cacert /path/to/ca.crt https://localhost:5443/health` (expects `OK`).
+
 
 ### Secure gRPC
 
@@ -292,6 +487,124 @@ NOTE:
 1. model.py should be there in the model repository to use the python backend framework.
 2. Multiple versions are supported, only positive values as version model are supported
 
+### SHAP and LIME Explainability (Python Backend)
+
+The Python backend has no built-in SHAP or LIME support. Explainability must be implemented directly in your `model.py` using the `shap` and `lime` Python packages. You have full control over the implementation — how the background dataset is constructed, which explainer settings are used, and how attribution values are assembled into output tensors.
+
+#### Required config.pbtxt changes
+
+Declare `shap_values` and `lime_values` as explicit output tensors alongside your model's primary outputs:
+
+```
+backend: "python"
+max_batch_size: 32
+
+input [{
+  name: "IN0"
+  data_type: TYPE_FP32
+  dims: [ 30 ]
+}]
+
+output [
+  { name: "OUT0"       data_type: TYPE_FP64  dims: [ 1  ] },
+  { name: "shap_values" data_type: TYPE_FP64  dims: [ 30 ] },
+  { name: "lime_values" data_type: TYPE_FP64  dims: [ 30 ] }
+]
+```
+
+The number of features (`30` above) must match your model's input dimension. The tensor names `shap_values` and `lime_values` are conventions — use any names that are consistent between `config.pbtxt` and your `model.py`.
+
+#### Example model.py structure
+
+```python
+import numpy as np
+import triton_python_backend_utils as pb_utils
+
+NF = 30  # number of input features
+
+class TritonPythonModel:
+
+    def initialize(self, args):
+        # Load your model here (e.g. from a pickle or checkpoint file).
+        # Import shap and lime inside initialize() so a missing package
+        # produces a clear warning without preventing the model from loading.
+        try:
+            import shap as _shap
+            self._shap = _shap
+            self._has_shap = True
+        except ImportError:
+            self._has_shap = False
+
+        try:
+            import lime.lime_tabular as _lime
+            self._lime = _lime
+            self._has_lime = True
+        except ImportError:
+            self._has_lime = False
+
+    def execute(self, requests):
+        responses = []
+        for request in requests:
+            x = pb_utils.get_input_tensor_by_name(request, "IN0") \
+                        .as_numpy().astype(np.float32)
+            n = x.shape[0]
+
+            # --- Primary inference ---
+            labels = self._model.predict(x).astype(np.float64)
+
+            # --- Build a predict_fn that returns a scalar score per sample ---
+            def predict_fn(x_mat):
+                proba = self._model.predict_proba(
+                    np.asarray(x_mat, dtype=np.float32))
+                return proba[:, 1].astype(np.float64)  # score for class 1
+
+            # --- SHAP ---
+            if self._has_shap:
+                # Use the inference batch as the background dataset.
+                explainer = self._shap.KernelExplainer(predict_fn, x)
+                raw = explainer.shap_values(x, nsamples=200, silent=True)
+                shap_arr = np.array(
+                    raw[1] if isinstance(raw, list) else raw,
+                    dtype=np.float64)
+            else:
+                shap_arr = np.zeros((n, NF), dtype=np.float64)
+
+            # --- LIME ---
+            if self._has_lime:
+                lime_exp = self._lime.LimeTabularExplainer(
+                    training_data=x,
+                    mode="classification",
+                    discretize_continuous=False,
+                )
+                lime_arr = np.zeros((n, NF), dtype=np.float64)
+                for i in range(n):
+                    exp = lime_exp.explain_instance(
+                        x[i], predict_fn, num_features=NF, num_samples=1000,
+                        labels=(1,))
+                    for fi, coef in exp.local_exp[1]:
+                        lime_arr[i, fi] = coef
+            else:
+                lime_arr = np.zeros((n, NF), dtype=np.float64)
+
+            # --- Assemble response ---
+            responses.append(pb_utils.InferenceResponse(output_tensors=[
+                pb_utils.Tensor("OUT0",
+                    labels.reshape(n, 1).astype(np.float64)),
+                pb_utils.Tensor("shap_values", shap_arr),
+                pb_utils.Tensor("lime_values",  lime_arr),
+            ]))
+        return responses
+
+    def finalize(self):
+        pass
+```
+
+Key points:
+
+- Import `shap` and `lime` inside `initialize()`, not at module level. A missing package logs a warning and falls back to zero-filled output rather than preventing the model from loading.
+- The `predict_fn` must accept a 2-D numpy array `[n_samples, n_features]` and return a 1-D array of scores.
+- The inference batch is used as the background dataset for both SHAP and LIME, so no separate training dataset needs to be bundled with the model.
+
 ## ONNX-MLIR Backend <a id="onnx-mlir-backend"></a>
 
 A triton backend which allows the deployment of onnx-mlir or zDLC compiled
@@ -341,6 +654,103 @@ backend: "onnxmlir"
 For more options see [Model Configuration](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_configuration.md).
 
 NOTE: Multiple versions are supported, only positive values as version model are supported
+
+### SHAP and LIME Explainability (ONNX-MLIR Backend)
+
+The ONNX-MLIR backend implements SHAP and LIME explanations directly in C++. Both methods are model-agnostic and work with any model compiled by ONNX-MLIR or IBM zDLC.
+
+#### How it works
+
+When `COMPUTE_SHAP` or `COMPUTE_LIME` is set to `"true"` in `config.pbtxt`, the backend:
+
+1. Runs normal model inference to produce the primary output.
+2. Re-executes the model across coalition-masked inputs (SHAP) or Gaussian-noise-perturbed inputs (LIME).
+3. Writes the resulting `float64` attribution arrays into additional output tensors alongside the primary model output.
+
+Explanations are computed **synchronously** on the same inference path as the primary prediction. If SHAP or LIME computation fails, the backend logs a warning, zero-fills the attribution output tensor, and still returns the primary prediction. The request is **not** failed.
+
+#### XAI output tensor registration
+
+XAI output tensors are **automatically registered** by the backend. You do not need to declare them in the `output` block of `config.pbtxt`. If you do declare them (e.g. to control the tensor name), the backend will patch their dimensions to match the number of input features.
+
+If a disabled XAI tensor name remains declared in `config.pbtxt` but its corresponding flag is not set, it will be stripped from the output tensor list during model loading to avoid a configuration mismatch.
+
+#### Configuration parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `COMPUTE_SHAP` | `string` | `"false"` | Set to `"true"` to compute and return SHAP attributions. Case-sensitive. |
+| `COMPUTE_LIME` | `string` | `"false"` | Set to `"true"` to compute and return LIME attributions. Case-sensitive. |
+| `SHAP_OUTPUT_TENSOR_NAME` | `string` | `"shap_values"` | Output tensor name for SHAP results. |
+| `LIME_OUTPUT_TENSOR_NAME` | `string` | `"lime_values"` | Output tensor name for LIME results. |
+
+#### Output tensor specification
+
+Both XAI output tensors are always `TYPE_FP64`. Their shape is `[-1, num_features]` when `max_batch_size > 0`, or `[num_features]` for non-batched models. `num_features` is the product of all non-batch dimensions of the first declared input tensor.
+
+#### Example config.pbtxt with SHAP and LIME enabled
+
+The backend auto-registers XAI output tensors if they are not declared. Declaring them explicitly (as shown below) is recommended so the shape is visible in the configuration and can be validated. Use `dims: [-1]` — the backend patches the real feature count at first inference.
+
+The tensor names `shap_values` and `lime_values` are the defaults. They are configurable via `SHAP_OUTPUT_TENSOR_NAME` and `LIME_OUTPUT_TENSOR_NAME` — the declared output name must match the parameter value exactly.
+
+```
+backend: "onnxmlir"
+max_batch_size: 16
+
+input {
+  name: "IN0"
+  data_type: TYPE_FP32
+  dims: [ 30 ]
+}
+
+output {
+  name: "OUT0"
+  data_type: TYPE_FP32
+  dims: [ 2 ]
+}
+output {
+  # SHAP attributions — one value per input feature.
+  # dims: [-1] is resolved to the actual feature count at first inference.
+  name: "shap_values"
+  data_type: TYPE_FP64
+  dims: [ -1 ]
+}
+output {
+  # LIME coefficients — one value per input feature.
+  name: "lime_values"
+  data_type: TYPE_FP64
+  dims: [ -1 ]
+}
+
+parameters {
+  key: "COMPUTE_SHAP"
+  value { string_value: "true" }
+}
+parameters {
+  key: "COMPUTE_LIME"
+  value { string_value: "true" }
+}
+parameters {
+  # Name of the SHAP output tensor (default: "shap_values").
+  # Must match the output declaration name above.
+  key: "SHAP_OUTPUT_TENSOR_NAME"
+  value { string_value: "shap_values" }
+}
+parameters {
+  # Name of the LIME output tensor (default: "lime_values").
+  # Must match the output declaration name above.
+  key: "LIME_OUTPUT_TENSOR_NAME"
+  value { string_value: "lime_values" }
+}
+```
+
+Clients request XAI tensors by name in the `outputs` block of the inference request. Omitting an XAI tensor name from `outputs` causes Triton to omit that tensor from the response, which reduces transfer overhead when only the primary prediction is needed.
+
+#### Notes
+
+- Input must have data type `TYPE_FP32`. Other input types are not supported for XAI.
+- There is no background/reference dataset cache. Each inference request uses the current batch as its own background. Single-sample batches (N=1) fall back to a zero-vector reference, which may reduce SHAP accuracy.
 
 
 ## Snap ML C++ Backend <a id="snapml-cpp-backend"></a>
@@ -487,14 +897,132 @@ backend: "ibmsnapml"
     }
     ```
     
-- **Inputs and Outputs:** : 
-    Each model input and output must specify a name, datatype, and shape( for more details on 
-    inputs and output tensors check documentation of Triton Inference server [here](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_configuration.md#model-configuration)).The name specified for an input or output tensor must match the name 
-    expected by the model. An input shape indicates the shape of an input tensor expected by the model and by Triton inference request. An output 
-    shape indicates the shape of an output tensor produced by the model and returned by Triton in response to an inference request. Both input and output 
-    shape must have rank greater-or-equal-to 1, that is, the empty shape [ ] is not allowed.In case of preprocessing, the data type of Input 
-    must be ```TYPE_STRING```and output tensor is ```TYPE_FP64```. For more details on 
+- **Inputs and Outputs:** :
+    Each model input and output must specify a name, datatype, and shape( for more details on
+    inputs and output tensors check documentation of Triton Inference server [here](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_configuration.md#model-configuration)).The name specified for an input or output tensor must match the name
+    expected by the model. An input shape indicates the shape of an input tensor expected by the model and by Triton inference request. An output
+    shape indicates the shape of an output tensor produced by the model and returned by Triton in response to an inference request. Both input and output
+    shape must have rank greater-or-equal-to 1, that is, the empty shape [ ] is not allowed.In case of preprocessing, the data type of Input
+    must be ```TYPE_STRING```and output tensor is ```TYPE_FP64```. For more details on
     supported tensor data types by Triton Inference server ,vist [here](https://github.com/triton-inference-server/server/blob/r24.07/docs/user_guide/model_configuration.md#datatypes).
+
+### SHAP and LIME Explainability (Snap ML C++ Backend)
+
+The Snap ML C++ backend implements SHAP and LIME explanations natively in C++. Both methods are available for any tree-ensemble model type supported by the backend. For formats where the tree structure can be parsed at load time, exact tree-path attribution is used; for all other formats a coalition-based marginal fallback is used instead.
+
+#### How it works
+
+When `COMPUTE_SHAP` or `COMPUTE_LIME` is set to `"true"` in `config.pbtxt`:
+
+1. The model is loaded and initialized.
+2. If `COMPUTE_SHAP` is `"true"`, the backend additionally parses the raw model file (`model.pmml`, `model.json`, or `model.txt`) into an internal tree representation at load time for exact tree-path attribution.
+3. On each inference request, after the primary prediction is computed, SHAP and/or LIME attribution is computed.
+4. Resulting attribution arrays are appended to the inference response alongside the primary prediction output.
+
+Explanations are computed **synchronously** on the same inference path. If SHAP or LIME computation fails, the backend logs a warning, zero-fills the attribution output tensor, and still returns the primary prediction. The request is **not** failed.
+
+If a preprocessing pipeline (`PREPROCESSING_FILE`) is configured, the **preprocessed** feature matrix (post-transform) is passed to both SHAP and LIME. The attribution values therefore correspond to the preprocessed feature space, not the raw input space.
+
+#### XAI output tensor registration
+
+XAI output tensors are **automatically registered** by the backend at model load time. You do **not** need to declare `shap_values` or `lime_values` in the `output` block of `config.pbtxt`. The backend registers them with:
+- Data type: `TYPE_FP64`
+- Shape: `[-1, n_features]` (with batching) or `[n_features]` (without), where `n_features` is the number of features after any configured preprocessing step.
+
+If you manually declare the XAI output tensors in `config.pbtxt`, the backend detects the matching name and skips auto-registration, leaving your declaration intact.
+
+#### Configuration parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `COMPUTE_SHAP` | `string` | `"false"` | Set to `"true"` to compute and return SHAP attributions. Case-sensitive. |
+| `COMPUTE_LIME` | `string` | `"false"` | Set to `"true"` to compute and return LIME attributions. Case-sensitive. |
+| `SHAP_OUTPUT_TENSOR_NAME` | `string` | `"shap_values"` | Name of the output tensor that receives SHAP results. |
+| `LIME_OUTPUT_TENSOR_NAME` | `string` | `"lime_values"` | Name of the output tensor that receives LIME results. |
+
+All four parameters are optional. Omitting `COMPUTE_SHAP` and `COMPUTE_LIME` (or setting them to any value other than `"true"`) disables XAI entirely.
+
+#### Output tensor specification
+
+Both XAI output tensors have data type `TYPE_FP64`. Their shape per sample is `[n_features]`, where `n_features` is the number of features in the (optionally preprocessed) input space. With batching enabled, the tensor shape is `[batch_size, n_features]`.
+
+#### Example config.pbtxt with SHAP and LIME enabled
+
+The backend auto-registers `shap_values` and `lime_values` if not declared. Declare them explicitly with `dims: [-1]` so the shape is visible and the backend patches the real feature count at first inference. The tensor names are configurable via `SHAP_OUTPUT_TENSOR_NAME` and `LIME_OUTPUT_TENSOR_NAME` — the declared output name must match the parameter value exactly.
+
+```
+backend: "ibmsnapml"
+max_batch_size: 32
+
+input {
+  name: "IN0"
+  data_type: TYPE_FP32
+  dims: [ 30 ]
+}
+
+output {
+  name: "OUT0"
+  data_type: TYPE_FP64
+  dims: [ 1 ]
+}
+output {
+  # SHAP attributions — one value per feature (preprocessed space when
+  # PREPROCESSING_FILE is set). dims: [-1] is resolved at first inference.
+  name: "shap_values"
+  data_type: TYPE_FP64
+  dims: [ -1 ]
+}
+output {
+  # LIME coefficients — one value per feature.
+  name: "lime_values"
+  data_type: TYPE_FP64
+  dims: [ -1 ]
+}
+
+parameters {
+  key: "MODEL_FILE_FORMAT"
+  value { string_value: "pmml" }
+}
+parameters {
+  key: "SNAPML_TARGET_CLASS"
+  value { string_value: "BoostingMachineClassifier" }
+}
+parameters {
+  key: "COMPUTE_SHAP"
+  value { string_value: "true" }
+}
+parameters {
+  key: "COMPUTE_LIME"
+  value { string_value: "true" }
+}
+parameters {
+  # Name of the SHAP output tensor (default: "shap_values").
+  # Must match the output declaration name above.
+  key: "SHAP_OUTPUT_TENSOR_NAME"
+  value { string_value: "shap_values" }
+}
+parameters {
+  # Name of the LIME output tensor (default: "lime_values").
+  # Must match the output declaration name above.
+  key: "LIME_OUTPUT_TENSOR_NAME"
+  value { string_value: "lime_values" }
+}
+```
+
+#### Supported model formats for XAI
+
+| Format | `MODEL_FILE_FORMAT` value | Model file | SHAP algorithm |
+|--------|--------------------------|------------|----------------|
+| PMML | `pmml` | `model.pmml` | Exact tree-path attribution |
+| XGBoost JSON | `xgb_json` | `model.json` | Exact tree-path attribution |
+| LightGBM text | `lightgbm` | `model.txt` | Exact tree-path attribution |
+| ONNX | `onnx` | `model.onnx` | Coalition-based marginal fallback (no tree parsing) |
+
+#### Notes
+
+- SHAP and LIME are computed on the **preprocessed** feature space when `PREPROCESSING_FILE` is set. Attributions do not directly correspond to the raw input features in that case.
+- There is no background/reference dataset cache between requests. Each request batch serves as its own background.
+- The `LIME_OUTPUT_TENSOR_NAME` and `SHAP_OUTPUT_TENSOR_NAME` parameters must not match any primary output tensor name already declared in `config.pbtxt`.
 
 ## PyTorch Backend <a id="pytorch-backend"></a>
 
@@ -912,11 +1440,124 @@ Note: If the `tokenizer_instance_name` field is provided in the `config.pbtxt`, 
      }
      ```
 
-Note: 
+Note:
 
 - This feature is only for the models available in Transformers package and whose weights are compatible by `from_pretrained` method of transformers models/tokenizers. Please refer to [this](https://huggingface.co/docs/transformers/en/models) document to understand model loading.
 - If `is_hf_weights_model` is set to `true` the following config parameters will be ignored: `model_class_name` and `default_model_filename`.
 - With this feature, you can either deploy models accepting pre-tokenized inputs ( string inputs ) or post-tokenized inputs ( `input_ids`, `attention_mask`, etc ). This is determined based on whether the tokenization information ( `tokenizer_instance_name`, `tokenizer_weights`, and `tokenizer_kwargs` ) is provided in the `config.pbtxt`.
+
+### SHAP and LIME Explainability (PyTorch Backend)
+
+The PyTorch backend integrates SHAP and LIME explanations via the `shap` and `lime` Python packages (`shap==0.52.0` and `lime==0.2.0.1`, both pre-installed in the container image). If either is absent, the model fails to load.
+
+> **TorchScript models** (`model.pt` only, no `model.py`) are fully supported. The backend loads the TorchScript file directly and applies SHAP and LIME without requiring any user-written Python model code.
+
+#### How it works
+
+When `COMPUTE_SHAP` or `COMPUTE_LIME` is set to `"true"` in `config.pbtxt`, for each inference request the backend:
+
+1. Executes the model normally to produce the primary output tensors.
+2. Identifies the target class from the highest-logit class of the primary output (first output tensor, first sample in the batch).
+3. Builds a prediction function that re-runs the model for any given input array, returning the scalar logit of the fixed target class. This function is used internally for perturbation scoring.
+4. Calls the `shap` library's model-agnostic kernel explainer (SHAP) and/or `lime.lime_tabular.LimeTabularExplainer` (LIME) using that prediction function.
+5. Inserts the resulting `float64` attribution arrays into the output tensor list at the positions declared in `config.pbtxt`.
+
+Explanations are computed **synchronously** per inference request.
+
+#### XAI output tensors must be declared in config.pbtxt
+
+Unlike the C++ backends, the PyTorch backend does **not** auto-register XAI output tensors. You must declare them explicitly in `config.pbtxt`. The backend matches declared output tensor names against the configured XAI names to determine which output slots to fill with attribution arrays.
+
+If `COMPUTE_SHAP=true` is set but no output tensor named `shap_values` (or the custom `SHAP_OUTPUT_TENSOR_NAME`) is declared, the flag is silently cleared and no SHAP computation occurs.
+
+#### Configuration parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `COMPUTE_SHAP` | `string` | `"false"` | Set to `"true"` to compute and return SHAP attributions. Case-sensitive. |
+| `COMPUTE_LIME` | `string` | `"false"` | Set to `"true"` to compute and return LIME attributions. Case-sensitive. |
+| `SHAP_OUTPUT_TENSOR_NAME` | `string` | `"shap_values"` | Name of the output tensor for SHAP results. Must match a declared output in `config.pbtxt`. |
+| `LIME_OUTPUT_TENSOR_NAME` | `string` | `"lime_values"` | Name of the output tensor for LIME results. Must match a declared output in `config.pbtxt`. |
+
+#### Output tensor specification
+
+XAI output tensors must be declared as `TYPE_FP64` in `config.pbtxt`. Their shape is `[-1, n_features]` where `n_features` is the number of elements in the (flattened) first input tensor.
+
+#### Required dependencies
+
+The `shap` (`==0.52.0`) and `lime` (`==0.2.0.1`) packages are pre-installed in the container image. No manual installation is needed. If you are building a custom image, install the same pinned versions:
+
+```bash
+pip install shap==0.52.0 lime==0.2.0.1
+```
+
+The backend imports both packages at model load time. If either is missing, the model fails to initialize with a clear error message indicating which package is absent.
+
+#### Example config.pbtxt with SHAP and LIME enabled
+
+XAI output tensors **must** be declared explicitly in `config.pbtxt` for the PyTorch backend — unlike the C++ backends, no auto-registration is performed. Use `dims: [-1]` so the feature count is resolved at runtime. The tensor names are configurable via `SHAP_OUTPUT_TENSOR_NAME` and `LIME_OUTPUT_TENSOR_NAME` — the declared output name must match the parameter value exactly.
+
+```
+backend: "pytorch"
+max_batch_size: 16
+
+input {
+  name: "IN0"
+  data_type: TYPE_FP32
+  dims: [ 30 ]
+}
+
+output {
+  name: "OUT0"
+  data_type: TYPE_FP32
+  dims: [ 2 ]
+}
+output {
+  # SHAP attributions — one value per input feature.
+  # dims: [-1] is resolved to n_features at runtime.
+  name: "shap_values"
+  data_type: TYPE_FP64
+  dims: [ -1 ]
+}
+output {
+  # LIME coefficients — one value per input feature.
+  name: "lime_values"
+  data_type: TYPE_FP64
+  dims: [ -1 ]
+}
+
+parameters {
+  key: "COMPUTE_SHAP"
+  value { string_value: "true" }
+}
+parameters {
+  key: "COMPUTE_LIME"
+  value { string_value: "true" }
+}
+parameters {
+  # Name of the SHAP output tensor (default: "shap_values").
+  # Must match the output declaration name above.
+  key: "SHAP_OUTPUT_TENSOR_NAME"
+  value { string_value: "shap_values" }
+}
+parameters {
+  # Name of the LIME output tensor (default: "lime_values").
+  # Must match the output declaration name above.
+  key: "LIME_OUTPUT_TENSOR_NAME"
+  value { string_value: "lime_values" }
+}
+```
+
+#### XAI output tensor ordering
+
+XAI output tensors can appear at any position in `config.pbtxt`'s `output` list. The backend uses the declared name to identify them, not their position. The final response tensor list matches the `config.pbtxt` order exactly, with primary model outputs and XAI arrays merged accordingly.
+
+#### Notes
+
+- Only numeric input types are supported. If the first input tensor has data type `TYPE_STRING`, both XAI flags are cleared before inference. Because the declared XAI output slots are never filled, the response tensor count would not match `config.pbtxt` and the request fails. Do not set `COMPUTE_SHAP` or `COMPUTE_LIME` for models whose first input is `TYPE_STRING`.
+- For batched inference, the batch is gathered before XAI computation. SHAP uses the full batch as the background dataset; the target class is fixed to the argmax of the **first** sample in the batch.
+- XAI is not supported for HuggingFace models with tokenized string inputs (`tokenizer_instance_name` set and `TYPE_STRING` inputs).
+- `shap` and `lime` must be pre-installed. The model load fails with a clear error if either package is missing.
 
 
 # Triton Model Analyzer<a id="triton-model-analyzer"></a>
@@ -924,7 +1565,7 @@ Triton Model Analyzer is a CLI tool which can help you find a more optimal confi
 for single, multiple, ensemble, or BLS models running on a Triton Inference Server. It will also generate reports to
 help you better understand the trade-offs of the different configurations along with their compute and memory requirements.
 
-Triton Model Analyzer uses Triton Performance Analyzer to calculate inefernce server side metrics.
+Triton Model Analyzer uses Triton Performance Analyzer to calculate inference server side metrics.
 
 ## Triton Performance Analyzer:
 Triton Performance Analyzer is CLI tool which can help you optimize the inference performance of models running on Triton
@@ -1055,6 +1696,7 @@ plots: A directory consists of images of plots of different calculated parameter
 - [Traces](#tis-traces-restapi)
 - [Statistics](#tis-statistics-restapi)
 - [Server Metadata](#tis-server-metadata-restapi)
+- [MLflow APIs](#tis-mlflow-restapi)
 
 ## Model Management <a id="tis-model-mgmt-restapi"></a>
 
@@ -1206,6 +1848,456 @@ GET `v2`
 For more details about the statistics API calls please visit the kserve
 documentation website link
 [here](https://github.com/kserve/kserve/blob/master/docs/predict-api/v2/required_api.md#server-metadata-response-json-object)
+
+## MLflow APIs <a id="tis-mlflow-restapi"></a>
+
+IBM Z Accelerated for NVIDIA Triton Inference Server exposes two custom HTTP endpoints. These endpoints are registered by the Triton HTTP server's C++ layer and are available whenever the `mlflow_model` adapter is loaded.
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/v2/mlflow_deploy` | `POST` | Model deployment lifecycle — create, update, delete, list, get, predict |
+| `/v2/mlflow_monitor` | `POST` | Inference statistics monitoring — start, stop, list watchers |
+
+Both endpoints accept a JSON body with an `"operation"` field and return a plain JSON response (the KServe v2 envelope is stripped by the HTTP layer). They are available on the same HTTP port as the standard Triton inference endpoint (default `8000`).
+
+For full request/response schemas, supported operations, and usage examples, see the [MLflow Integration](#mlflow-integration) section.
+
+# MLflow Integration <a id="mlflow-integration"></a>
+
+IBM Z Accelerated for NVIDIA Triton Inference Server includes an MLflow integration that enables model deployment lifecycle management and inference statistics monitoring through custom HTTP APIs.
+
+## Architecture Overview
+
+The MLflow integration consists of three components:
+
+1. **mlflow-triton plugin** (`mlflow_triton.deployments.TritonPlugin`) — A Python package installed in the container that implements the MLflow `BaseDeploymentClient` interface. It handles artifact resolution, file transfer to the Triton model repository, and model load/unload operations via the Triton HTTP client.
+
+2. **MLflow adapter model** (`mlflow_model`) — A Triton Python backend model with two versions loaded at server startup. Version 1 handles deployment operations; Version 2 handles monitoring operations. Both receive requests through custom HTTP routes.
+
+3. **Custom HTTP routes** — The Triton HTTP server exposes two additional endpoints registered by the server's C++ layer:
+   - `POST /v2/mlflow_deploy` — Routes to `mlflow_model` version 1 (deployment operations)
+   - `POST /v2/mlflow_monitor` — Routes to `mlflow_model` version 2 (monitoring operations)
+
+The adapter models use a shared `config.pbtxt` with a single `MLFLOW_REQUEST` input tensor (BYTES, shape [1]) and a single `MLFLOW_RESPONSE` output tensor (BYTES, shape [1]). Each request body is a JSON-encoded operation payload. The HTTP layer strips the KServe v2 envelope and returns only the raw JSON payload, so clients do not need to parse a KServe response wrapper.
+
+### Ports and environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TRITON_URL` | `localhost:8000` (deployment plugin); `http://localhost:8000` (monitor adapter) | Triton HTTP endpoint. The deployment plugin strips any `http://` scheme prefix internally; the monitor adapter passes the value as-is to the HTTP client. Set this explicitly to avoid ambiguity. |
+| `TRITON_MODEL_REPO` | *(required)* | Filesystem path to the user model repository. Must point to the same directory that was passed as one of the `--model-repository` flags. |
+| `MLFLOW_TRACKING_URI` | `http://localhost:5000` | MLflow tracking server URI. Used by both the monitor adapter and the deployment plugin when logging metrics or resolving model URIs. |
+
+## Configuration and Startup
+
+### Prerequisites
+
+- The container image includes the `mlflow-triton` plugin package and the `mlflow` server binary.
+- Pass `-e ENABLE_MLFLOW="true"` to enable automatic startup of the MLflow server and auto-configuration of the `mlflow_model` adapter.
+- Triton must be started with `--model-control-mode=explicit` so that `load_model` / `unload_model` API calls work.
+- Mount a host directory to `/mlflow` to persist the MLflow SQLite database (`mlflow.db`) and artifacts across container restarts.
+- `TRITON_MODEL_REPO` specifies the model repository directory inside the container where MLflow-deployed models and artifacts are stored and served by Triton (e.g., `/models`). This must match the directory passed to Triton's `--model-repository` flag.
+
+### Single-container startup (recommended)
+
+Both the MLflow tracking server and Triton run inside the same container. Setting `-e ENABLE_MLFLOW="true"` automatically launches the background MLflow server and registers the internal MLflow model repository and adapter model within Triton. Port `5000` is published so external clients can reach the MLflow UI and tracking API.
+
+```bash
+podman run -d \
+  --name triton_mlflow \
+  -p 5000:5000 \
+  -p 8000:8000 \
+  -p 8001:8001 \
+  -p 8002:8002 \
+  -v $PWD/models:/models:z \
+  -v $PWD/mlflow:/mlflow:z \
+  -e TRITON_MODEL_REPO=/models \
+  -e ENABLE_MLFLOW="true" \
+  <image_id_or_tag> \
+  tritonserver \
+    --model-repository=/models \
+    --log-verbose=2 \
+    --model-control-mode=explicit
+```
+
+**Argument-by-argument explanation:**
+
+| Argument | What it does |
+|----------|-------------|
+| `-d` | Run the container in detached (background) mode. |
+| `--name triton_mlflow` | Assign a name to the container for easier management (`podman logs triton_mlflow`, `podman stop triton_mlflow`). |
+| `-p 5000:5000` | Expose the MLflow tracking server so clients outside the container can reach `http://localhost:5000`. |
+| `-p 8000:8000` | Expose the Triton HTTP endpoint used for inference and all MLflow deployment/monitoring API calls. |
+| `-p 8001:8001` | Expose the Triton gRPC endpoint for standard model inference. |
+| `-p 8002:8002` | Expose the Triton Prometheus metrics endpoint. |
+| `-v $PWD/models:/models:z` | Bind-mount the host `models/` directory to `/models` inside the container. The `:z` flag relabels the mount for SELinux-enforcing systems; omit it on non-SELinux hosts. |
+| `-v $PWD/mlflow:/mlflow:z` | Bind-mount the host `mlflow/` directory to `/mlflow` inside the container to persist the SQLite database and artifacts. |
+| `-e TRITON_MODEL_REPO=/models` | Environment variable specifying the model repository directory where MLflow-deployed models and configurations are written and loaded by Triton. Must match the user `--model-repository` path. |
+| `-e ENABLE_MLFLOW="true"` | Enables automatic MLflow background server startup and automatically registers the internal MLflow adapter model repository and startup model in Triton. |
+| `--model-repository=/models` | User model repository: your deployed models are written and loaded from here by the plugin. |
+| `--log-verbose=2` | Enable verbose server logging. Useful during initial setup; set to `0` in production to reduce log volume. |
+| `--model-control-mode=explicit` | Disables automatic model polling. Models are loaded and unloaded only via explicit API calls, which is required for the deployment plugin to work correctly. |
+
+> **Persistence:** The MLflow database (`mlflow.db`) and artifacts (`/mlflow/artifacts`) exist only inside the container unless `/mlflow` is bind-mounted to a host directory. The `mlflow-meta.json` tracking file written by each deployment lives in `/models/<name>/`, so it is persisted as long as the `/models` volume is mounted.
+
+> **`MLFLOW_TRACKING_URI` inside the container:** Because both processes run in the same container, the monitor adapter can reach the MLflow server at `http://localhost:5000`. This is the default value of `MLFLOW_TRACKING_URI`, so no additional `-e` flag is needed for single-container deployments.
+>
+> **Changing the MLflow tracking URI or port:** If you start the MLflow server on a different port (e.g. `--port 5001`) or point it to an external tracking server, you **must** pass the updated URI when starting the container:
+> ```bash
+> -e MLFLOW_TRACKING_URI=http://localhost:5001
+> ```
+> The monitor adapter reads `MLFLOW_TRACKING_URI` once at process start. Changing the environment variable after the container is running has no effect — you must restart the container with the correct value set.
+
+## Experiment Tracking
+
+The MLflow integration uses standard MLflow tracking APIs. Clients set the tracking URI and log parameters, metrics, and artifacts as they would with any MLflow project. Registered model versions can then be deployed to Triton by passing a `models:/` URI to the deployment operations.
+
+```python
+import mlflow
+
+mlflow.set_tracking_uri("http://localhost:5000")
+
+with mlflow.start_run(experiment_id=mlflow.create_experiment("my_experiment")):
+    mlflow.log_param("model_type", "lgbm")
+    mlflow.log_metric("auc", 0.92)
+
+# Register a model from an existing run artifact
+mlflow.register_model("runs:/<run_id>/model", "my_lgbm_model")
+```
+
+Deploying a registered model version to Triton:
+
+```python
+from mlflow.deployments import get_deploy_client
+
+client = get_deploy_client("triton")
+client.create_deployment("my_lgbm_model", "models:/my_lgbm_model/1")
+```
+
+The plugin resolves the model URI (including version aliases such as `models:/my_lgbm_model@champion`) to an integer version number, downloads the artifact from the MLflow artifact store, copies the model files into the Triton model repository under `<TRITON_MODEL_REPO>/<name>/1/`, and calls `triton_client.load_model(name)`.
+
+## Model Deployment API
+
+Deployment operations are sent to `POST /v2/mlflow_deploy` as a JSON body with an `"operation"` field.
+
+### Supported operations
+
+#### `create`
+
+Deploy a new model from MLflow to Triton.
+
+```bash
+curl -X POST http://localhost:8000/v2/mlflow_deploy \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operation": "create",
+    "model_name": "my_lgbm_model",
+    "model_uri": "models:/my_lgbm_model/1"
+  }'
+```
+
+Response:
+```json
+{"status": "ok", "deployment": {"model_name": "my_lgbm_model"}}
+```
+
+**Required fields:** `model_name`, `model_uri`.
+**Optional fields:** `config` (dict, may contain `"ready_timeout"` in seconds, default 60).
+
+The operation: downloads the artifact from MLflow, copies `config.pbtxt` to `<repo>/<name>/` and all other files to `<repo>/<name>/1/`, calls `load_model(name)`, then polls `/v2/models/<name>/ready` until the model is READY or the timeout expires. If `load_model` fails, the copied files are removed (rollback).
+
+#### `update`
+
+Replace an existing deployment with a new model version.
+
+```bash
+curl -X POST http://localhost:8000/v2/mlflow_deploy \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operation": "update",
+    "model_name": "my_lgbm_model",
+    "model_uri": "models:/my_lgbm_model/2"
+  }'
+```
+
+Response:
+```json
+{"status": "ok", "deployment": {"model_name": "my_lgbm_model"}}
+```
+
+The operation: unloads the model, copies new artifacts, reloads, and waits for READY. If the file copy or reload fails, the model is left unloaded. The error message directs the caller to retry `update_deployment`.
+
+#### `delete`
+
+Unload and remove a deployed model.
+
+```bash
+curl -X POST http://localhost:8000/v2/mlflow_deploy \
+  -H "Content-Type: application/json" \
+  -d '{"operation": "delete", "model_name": "my_lgbm_model"}'
+```
+
+Response:
+```json
+{"status": "ok", "deleted": "my_lgbm_model", "model_name": "my_lgbm_model"}
+```
+
+Calls `unload_model(name)` then removes the entire model directory from the Triton model repository.
+
+#### `list`
+
+List all plugin-managed deployments currently in READY state.
+
+```bash
+curl -X POST http://localhost:8000/v2/mlflow_deploy \
+  -H "Content-Type: application/json" \
+  -d '{"operation": "list"}'
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "deployments": [
+    {
+      "model_name": "my_lgbm_model",
+      "version": "1",
+      "state": "READY",
+      "triton_model_path": "/models/my_lgbm_model",
+      "mlflow_model_uri": "models:/my_lgbm_model/1"
+    }
+  ]
+}
+```
+
+Only models that have an `mlflow-meta.json` file in their model directory (i.e. models deployed through this plugin) and are currently in `READY` state are listed.
+
+#### `get`
+
+Get information about a specific deployment.
+
+```bash
+curl -X POST http://localhost:8000/v2/mlflow_deploy \
+  -H "Content-Type: application/json" \
+  -d '{"operation": "get", "model_name": "my_lgbm_model"}'
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "deployment": {
+    "model_name": "my_lgbm_model",
+    "version": "1",
+    "state": "READY",
+    "triton_model_path": "/models/my_lgbm_model",
+    "mlflow_model_uri": "models:/my_lgbm_model/1"
+  }
+}
+```
+
+Raises `{"status": "error"}` if the deployment does not exist.
+
+#### `predict`
+
+Run inference on a deployed model through the plugin.
+
+```bash
+curl -X POST http://localhost:8000/v2/mlflow_deploy \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operation": "predict",
+    "model_name": "my_lgbm_model",
+    "input": {
+      "inputs": [
+        {
+          "name": "IN0",
+          "shape": [1, 30],
+          "datatype": "FP32",
+          "data": [[0.1, 0.2, 0.3, 0.4, 0.5,
+                    0.6, 0.7, 0.8, 0.9, 1.0,
+                    1.1, 1.2, 1.3, 1.4, 1.5,
+                    1.6, 1.7, 1.8, 1.9, 2.0,
+                    2.1, 2.2, 2.3, 2.4, 2.5,
+                    2.6, 2.7, 2.8, 2.9, 3.0]]
+        }
+      ]
+    }
+  }'
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "outputs": {
+    "OUT0": [[0.15, 0.85]]
+  }
+}
+```
+
+The predict operation forwards the request to the deployed model's standard Triton inference endpoint (`/v2/models/<name>/infer`). Inference runs inside Triton against the deployed model — the MLflow adapter is not on the inference path.
+
+**Input formats accepted:**
+- KServe v2 format: `{"inputs": [{"name":..., "shape":..., "datatype":..., "data":...}]}`
+- Plain dict format: `{"IN0": [1.0, 2.0, ...]}` (values converted to `np.ndarray` automatically)
+
+## Monitoring API
+
+Monitoring operations are sent to `POST /v2/mlflow_monitor`.
+
+The monitor collects Triton inference statistics from `GET /v2/models/stats` (or `GET /v2/models/<name>/stats` for a single model), computes delta values between consecutive collection windows, and logs the resulting metrics to an MLflow experiment run.
+
+### Supported operations
+
+#### `monitor` (single run)
+
+Collect Triton statistics once and log them to MLflow as a single completed run.
+
+```bash
+curl -X POST http://localhost:8000/v2/mlflow_monitor \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operation": "monitor",
+    "experiment_name": "triton_stats",
+    "model_name": "my_lgbm_model",
+    "watch": false
+  }'
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "mode": "single_run",
+  "experiment_name": "triton_stats",
+  "run_id": "abc123..."
+}
+```
+
+#### `monitor` (continuous background watch)
+
+Start a background daemon thread that collects and logs metrics at a configurable interval.
+
+```bash
+curl -X POST http://localhost:8000/v2/mlflow_monitor \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operation": "monitor",
+    "experiment_name": "triton_stats",
+    "model_name": "my_lgbm_model",
+    "watch": true,
+    "interval": 60
+  }'
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "mode": "watch",
+  "experiment_name": "triton_stats",
+  "model_name": "my_lgbm_model",
+  "interval": 60,
+  "message": "Continuous background watch loop started ..."
+}
+```
+
+Each interval, the worker: fetches current stats, computes deltas vs. the previous snapshot, logs the metrics to a new MLflow run, closes the previous run, then waits for the next interval. The experiment is created automatically if it does not exist.
+
+**Request fields for `monitor`:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `experiment_name` | `string` | *(required)* | MLflow experiment name. Created if absent. |
+| `model_name` | `string` | `null` | Filter stats to one model. Omit to collect across all loaded models. |
+| `watch` | `bool` | `false` | `true` for continuous background loop; `false` for a single immediate flush. |
+| `interval` | `number` | `60` | Flush interval in seconds for watch mode. Must be > 0. |
+| `tracking_uri` | `string` | `$MLFLOW_TRACKING_URI` | Override the MLflow tracking URI for this request. |
+| `triton_url` | `string` | `$TRITON_URL` | Override the Triton URL for this request. |
+
+#### `stop`
+
+Stop an active background watch process.
+
+```bash
+curl -X POST http://localhost:8000/v2/mlflow_monitor \
+  -H "Content-Type: application/json" \
+  -d '{"operation": "stop", "experiment_name": "triton_stats"}'
+```
+
+To stop all watchers at once, pass `"experiment_name": "*"` or `"experiment_name": "all"`.
+
+Response:
+```json
+{
+  "status": "ok",
+  "stopped_experiments": ["triton_stats"]
+}
+```
+
+#### `list`
+
+List all currently active background watch processes.
+
+```bash
+curl -X POST http://localhost:8000/v2/mlflow_monitor \
+  -H "Content-Type: application/json" \
+  -d '{"operation": "list"}'
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "count": 1,
+  "watchers": [
+    {
+      "experiment_name": "triton_stats",
+      "model_name": "my_lgbm_model",
+      "interval": 60,
+      "uptime_seconds": 312.5,
+      "alive": true
+    }
+  ]
+}
+```
+
+### Monitored metrics
+
+The following metrics are logged to MLflow by each flush window, aggregated across all matched models (or the single named model).
+
+| MLflow metric name | Unit | Description |
+|--------------------|------|-------------|
+| `inference_count` | count | Total inference requests in the window. |
+| `error_count` | count | Failed inference requests in the window. |
+| `inference_latency_mean` | ms | Mean end-to-end inference latency (successful requests only). |
+| `queue_latency_mean_ms` | ms | Mean time spent in the request queue. |
+| `compute_latency_mean_ms` | ms | Mean time spent in the compute kernel. |
+
+Latency metrics are only logged when at least one successful inference occurred in the window. All values represent **deltas** within the current flush window, not cumulative totals.
+
+**Note:** Input drift and prediction drift monitoring are not implemented.
+
+### Background watcher lifecycle
+
+- Each background watcher is identified by its `experiment_name`. Only one watcher per experiment name can be active at a time.
+- Watchers do **not** persist across Triton server restarts.
+- If the MLflow tracking server is temporarily unavailable, the metrics for that window are lost and a warning is logged. The watcher continues running.
+- If the Triton stats endpoint is unreachable, the watcher skips the current window and continues running.
+
+## Troubleshooting
+
+| Issue | Likely cause | Fix |
+|-------|-------------|-----|
+| `TRITON_MODEL_REPO is not set` | `TRITON_MODEL_REPO` env var missing | `export TRITON_MODEL_REPO=/models` |
+| `Cannot reach Triton server` | Triton not running or wrong port | Ensure Triton is up, check `TRITON_URL` |
+| `Model did not become READY within Ns` | Model init failed | Check Triton server logs for backend errors |
+| `Unable to create deployment … already exists` | Model already deployed | Use `update` instead of `create` |
+| `mlflow-triton plugin is not installed` | Package absent | `pip install mlflow-triton` inside the container |
+| `experiment_name is required` | Missing field in JSON body | Add `"experiment_name"` to monitor request |
+| `[monitor] ERROR: log_metrics failed` | MLflow tracking server unavailable | Start `mlflow server`, check `MLFLOW_TRACKING_URI` |
+| `model_uri is required for update_deployment` | Missing `model_uri` | Pass `"model_uri"` in the update request |
 
 # Model Validation <a id="model-validation"></a>
 
@@ -1560,7 +2652,7 @@ Major version changes are not frequent and may include features supporting new
 IBM Z hardware as well as major feature changes in Triton Inference Server that
 are not likely backward compatible.
 
-## IBM Z Accelerated for for NVIDIA Triton™ Inference Server versions
+## IBM Z Accelerated for NVIDIA Triton™ Inference Server versions
 
 Each release version of IBM Z Accelerated for NVIDIA Triton™ Inference Server
 has the form MAJOR.MINOR.PATCH (X.Y.Z). For example, IBM Z Accelerated for
