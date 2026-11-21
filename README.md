@@ -1892,39 +1892,32 @@ The adapter models use a shared `config.pbtxt` with a single `MLFLOW_REQUEST` in
 
 ### Prerequisites
 
-- The container image must include the `mlflow-triton` plugin package and the `mlflow` server binary.
+- The container image includes the `mlflow-triton` plugin package and the `mlflow` server binary.
+- Pass `-e ENABLE_MLFLOW="true"` to enable automatic startup of the MLflow server and auto-configuration of the `mlflow_model` adapter.
 - Triton must be started with `--model-control-mode=explicit` so that `load_model` / `unload_model` API calls work.
-- The `mlflow_model` adapter is always located at `/mlflow/models` inside the container. It is loaded at startup via `--load-model=mlflow_model` using `--model-repository=/mlflow/models`. Do not place it in the user model repository (`/models`).
-- `/mlflow` inside the container is used by the MLflow tracking server for its SQLite database and artifact storage. Mount a host directory there to persist data across container restarts.
-- `TRITON_MODEL_REPO` must point to the user model repository (the directory where deployed models are written). This is the second `--model-repository` path, not the MLflow-internal one.
+- Mount a host directory to `/mlflow` to persist the MLflow SQLite database (`mlflow.db`) and artifacts across container restarts.
+- `TRITON_MODEL_REPO` specifies the model repository directory inside the container where MLflow-deployed models and artifacts are stored and served by Triton (e.g., `/models`). This must match the directory passed to Triton's `--model-repository` flag.
 
 ### Single-container startup (recommended)
 
-Both the MLflow tracking server and Triton run inside the same container. Port `5000` is published so external clients can reach the MLflow UI and tracking API. The `/mlflow/models` repository is managed internally by the MLflow adapter; `/models` is the user model repository where your own models live.
+Both the MLflow tracking server and Triton run inside the same container. Setting `-e ENABLE_MLFLOW="true"` automatically launches the background MLflow server and registers the internal MLflow model repository and adapter model within Triton. Port `5000` is published so external clients can reach the MLflow UI and tracking API.
 
 ```bash
 podman run -d \
   --name triton_mlflow \
-  -p 5000:5000 \          # MLflow tracking server UI and API
-  -p 8000:8000 \          # Triton HTTP inference endpoint
-  -p 8001:8001 \          # Triton gRPC endpoint
-  -p 8002:8002 \          # Triton Prometheus metrics endpoint
-  -v $PWD/models:/models:z \   # Mount user model repository (SELinux :z relabels for container access)
-  -e TRITON_MODEL_REPO=/models \   # Tells the plugin where to write deployed models
+  -p 5000:5000 \
+  -p 8000:8000 \
+  -p 8001:8001 \
+  -p 8002:8002 \
+  -v $PWD/models:/models:z \
+  -v $PWD/mlflow:/mlflow:z \
+  -e TRITON_MODEL_REPO=/models \
+  -e ENABLE_MLFLOW="true" \
   <image_id_or_tag> \
-  /bin/bash -c "
-    mlflow server \
-      --backend-store-uri sqlite:////mlflow/mlflow.db \   # SQLite DB inside the container (persist /mlflow to keep it)
-      --default-artifact-root /mlflow/artifacts \        # Artifact storage inside the container
-      --host 0.0.0.0 \                                   # Listen on all interfaces so external clients can connect
-      --port 5000 &                                      # Run in background; & lets the shell continue to tritonserver
-    tritonserver \
-      --model-repository=/mlflow/models \    # Internal repo: mlflow_model adapter lives here (managed by the adapter)
-      --model-repository=/models \           # User repo: your deployed models are written here by the plugin
-      --load-model=mlflow_model \            # Pre-load the MLflow adapter at startup (both version 1 and 2)
-      --log-verbose=2 \                      # Verbose logging for troubleshooting (reduce to 0 in production)
-      --model-control-mode=explicit          # Required: enables load_model / unload_model API calls
-  "
+  tritonserver \
+    --model-repository=/models \
+    --log-verbose=2 \
+    --model-control-mode=explicit
 ```
 
 **Argument-by-argument explanation:**
@@ -1938,14 +1931,10 @@ podman run -d \
 | `-p 8001:8001` | Expose the Triton gRPC endpoint for standard model inference. |
 | `-p 8002:8002` | Expose the Triton Prometheus metrics endpoint. |
 | `-v $PWD/models:/models:z` | Bind-mount the host `models/` directory to `/models` inside the container. The `:z` flag relabels the mount for SELinux-enforcing systems; omit it on non-SELinux hosts. |
-| `-e TRITON_MODEL_REPO=/models` | Tells the MLflow deployment plugin where to copy model files when a `create` or `update` operation is received. Must match the second `--model-repository` path. |
-| `--backend-store-uri sqlite:////mlflow/mlflow.db` | Store MLflow run metadata in a SQLite file at `/mlflow/mlflow.db`. Mount `/mlflow` to a host directory to persist this across restarts. |
-| `--default-artifact-root /mlflow/artifacts` | Store model artifacts at `/mlflow/artifacts` inside the container. Also persisted if `/mlflow` is mounted. |
-| `--host 0.0.0.0` | Bind the MLflow server to all interfaces so it is reachable at `http://localhost:5000` from outside the container. |
-| `--port 5000 &` | Start the MLflow server on port 5000 as a background process so the shell can continue to launch Triton. |
-| `--model-repository=/mlflow/models` | First model repository: the MLflow adapter (`mlflow_model`) is stored here. This directory is managed internally by the adapter and should not be used for your own models. |
-| `--model-repository=/models` | Second model repository: your user models and any models deployed via the plugin are written here. |
-| `--load-model=mlflow_model` | Load the `mlflow_model` adapter at startup. Because `config.pbtxt` sets `version_policy: { all {} }`, both version 1 (deployment) and version 2 (monitoring) are loaded. |
+| `-v $PWD/mlflow:/mlflow:z` | Bind-mount the host `mlflow/` directory to `/mlflow` inside the container to persist the SQLite database and artifacts. |
+| `-e TRITON_MODEL_REPO=/models` | Environment variable specifying the model repository directory where MLflow-deployed models and configurations are written and loaded by Triton. Must match the user `--model-repository` path. |
+| `-e ENABLE_MLFLOW="true"` | Enables automatic MLflow background server startup and automatically registers the internal MLflow adapter model repository and startup model in Triton. |
+| `--model-repository=/models` | User model repository: your deployed models are written and loaded from here by the plugin. |
 | `--log-verbose=2` | Enable verbose server logging. Useful during initial setup; set to `0` in production to reduce log volume. |
 | `--model-control-mode=explicit` | Disables automatic model polling. Models are loaded and unloaded only via explicit API calls, which is required for the deployment plugin to work correctly. |
 
